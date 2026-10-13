@@ -4,6 +4,8 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -60,8 +62,8 @@ fun HomeScreen(
             item {
                 Row(Modifier.statusBarsPadding().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(greeting(), color = Slate400)
-                        Text(user.name.substringBefore(" "), style = MaterialTheme.typography.headlineLarge)
+                        Text(greeting(), color = Xyon.colors.inkSoft)
+                        Text(user.name.substringBefore(" "), style = MaterialTheme.typography.displayMedium)
                     }
                     BadgedBox(badge = { if (unread > 0) Badge { Text("$unread") } }) {
                         IconButton(onNotifications) { Icon(Icons.Filled.Notifications, "Notificaciones") }
@@ -70,7 +72,7 @@ fun HomeScreen(
                 }
             }
             item {
-                GlassCard(Modifier.fillMaxWidth().staggered(0), accent = if (clockedIn) Success else Primary400) {
+                Box(Modifier.fillMaxWidth().staggered(0).clip(RoundedCornerShape(40.dp)).border(1.5.dp, Xyon.colors.outline, RoundedCornerShape(40.dp))) { BlueField(Modifier.matchParentSize()) {}; Column(Modifier.fillMaxWidth().padding(vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     FichajeHero(
                         clockedIn = clockedIn, since = it.currentFichaje?.timestamp, busy = busy,
                         expected = it.turno?.label ?: it.turno?.expectedEntry?.let { e -> "Entrada prevista $e" },
@@ -82,16 +84,16 @@ fun HomeScreen(
                             permLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                         } else go(entering)
                     }
-                }
+                } }
             }
             item {
                 val pending = vacations.data?.count { v -> v.status.startsWith("PENDING") } ?: 0
                 val left = balance.data?.vacationDaysUsed
                 val hoursWeek = week.data?.sumOf { d -> d.horasTrabajadas } ?: 0.0
                 Row(Modifier.fillMaxWidth().staggered(1), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatPill("Esta semana", "%.1fh".format(hoursWeek), Icons.Filled.Schedule, Primary400, Modifier.weight(1f))
-                    StatPill("Pendientes", "$pending", Icons.Filled.HourglassTop, Warning, Modifier.weight(1f))
-                    StatPill("Días usados", left?.let { v -> "%.0f".format(v) } ?: "-", Icons.Filled.BeachAccess, Success, Modifier.weight(1f))
+                    StatPill("Esta semana", "%.1fh".format(hoursWeek), Icons.Filled.Schedule, Lime, Modifier.weight(1f))
+                    StatPill("Pendientes", "$pending", Icons.Filled.HourglassTop, Lilac, Modifier.weight(1f))
+                    StatPill("Días usados", left?.let { v -> "%.0f".format(v) } ?: "-", Icons.Filled.BeachAccess, Sun, Modifier.weight(1f))
                 }
             }
             item {
@@ -130,9 +132,9 @@ fun HomeScreen(
 @Composable
 private fun QuickTile(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit, modifier: Modifier) {
     GlassCard(modifier, onClick = onClick) {
-        Icon(icon, null, tint = Primary400)
+        Box(Modifier.size(40.dp).clip(CircleShape).background(Lime), contentAlignment = Alignment.Center) { Icon(icon, null, tint = InkBlack, modifier = Modifier.size(22.dp)) }
         Spacer(Modifier.height(6.dp))
-        Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false)
     }
 }
 

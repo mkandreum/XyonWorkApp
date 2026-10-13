@@ -11,6 +11,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -35,6 +36,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.xyon.empleados.data.User
+import com.xyon.empleados.ui.admin.adminRoutes
 import com.xyon.empleados.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -127,8 +129,7 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
                     composable("notifications") { Scoped(this) { NotificationsScreen({ nav.popBackStack() }) } }
                     composable("fichajes") { Scoped(this) { FichajesScreen({ nav.popBackStack() }, snack = say) } }
                     composable("payroll") { Scoped(this) { PayrollScreen({ nav.popBackStack() }, snack = say) } }
-                    composable("team") { Scoped(this) { ManagerScreen({ nav.popBackStack() }, snack = say) } }
-                    composable("admin") { Scoped(this) { AdminScreen({ nav.popBackStack() }, snack = say) } }
+                    adminRoutes(nav, user, say)
                 }
             }
         }
@@ -145,32 +146,28 @@ private fun Scoped(scope: AnimatedVisibilityScope, content: @Composable () -> Un
     CompositionLocalProvider(LocalAnimScope provides scope) { Box(Modifier.fillMaxSize()) { content() } }
 }
 
-/** Floating glass pill with a spring-sliding selection indicator. */
+/** Floating dark capsule, icon-only, with a lime highlight that springs between tabs. */
 @Composable
 private fun BottomBar(selected: String, onSelect: (String) -> Unit) {
     val haptic = LocalHapticFeedback.current
+    val x = Xyon.colors
     val idx = TABS.indexOfFirst { it.route == selected }.coerceAtLeast(0)
-    BoxWithConstraints(
-        Modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth().height(68.dp)
-            .clip(RoundedCornerShape(28.dp)).background(Brush.verticalGradient(listOf(Color(0xE6182446), Color(0xF20D1429))))
-            .border(1.dp, GlassStroke, RoundedCornerShape(28.dp)),
-    ) {
-        val w = maxWidth / TABS.size
-        val x by animateDpAsState(w * idx, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMediumLow), label = "ind")
-        Box(Modifier.offset(x = x).width(w).fillMaxHeight().padding(8.dp).clip(RoundedCornerShape(20.dp)).background(Primary600.copy(alpha = .28f)))
-        Row(Modifier.fillMaxSize()) {
-            TABS.forEachIndexed { i, t ->
-                val sel = i == idx
-                val s by animateFloatAsState(if (sel) 1.18f else 1f, spring(Spring.DampingRatioHighBouncy, Spring.StiffnessMedium), label = "s")
-                val tint by animateColorAsState(if (sel) Primary300 else Slate500, label = "t")
-                Column(
-                    Modifier.weight(1f).fillMaxHeight().clickable(remember { MutableInteractionSource() }, null) {
-                        if (!sel) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onSelect(t.route) }
-                    },
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-                ) {
-                    Icon(t.icon, t.label, tint = tint, modifier = Modifier.scale(s))
-                    AnimatedVisibility(sel) { Text(t.label, color = tint, style = MaterialTheme.typography.labelSmall, maxLines = 1) }
+    val item = 58.dp
+    Box(Modifier.navigationBarsPadding().padding(bottom = 14.dp)) {
+        Box(Modifier.clip(CircleShape).background(x.capsule).border(1.5.dp, if (x.dark) x.outline else Color.Transparent, CircleShape).padding(7.dp)) {
+            val ind by animateDpAsState(item * idx, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "ind")
+            Box(Modifier.offset(x = ind).size(item).clip(CircleShape).background(Lime))
+            Row {
+                TABS.forEachIndexed { i, t ->
+                    val sel = i == idx
+                    val s by animateFloatAsState(if (sel) 1.15f else 1f, spring(Spring.DampingRatioHighBouncy, Spring.StiffnessMedium), label = "s")
+                    val tint by animateColorAsState(if (sel) InkBlack else x.onCapsule.copy(alpha = .62f), label = "t")
+                    Box(
+                        Modifier.size(item).clip(CircleShape).clickable(remember { MutableInteractionSource() }, null) {
+                            if (!sel) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onSelect(t.route) }
+                        },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(t.icon, t.label, tint = tint, modifier = Modifier.scale(s)) }
                 }
             }
         }

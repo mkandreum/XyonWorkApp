@@ -3,6 +3,8 @@ package com.xyon.empleados.ui
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
@@ -29,22 +31,33 @@ import com.xyon.empleados.ui.theme.*
 @Composable
 private fun AuthShell(title: String, subtitle: String, onBack: (() -> Unit)?, content: @Composable ColumnScope.() -> Unit) {
     SecureScreen()
-    AuroraBackground {
-        Column(Modifier.fillMaxSize().systemBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(24.dp)) {
-            if (onBack != null) IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás") }
-            else Spacer(Modifier.height(48.dp))
-            var shown by remember { mutableStateOf(false) }
-            LaunchedEffect(Unit) { shown = true }
-            AnimatedVisibility(shown, enter = fadeIn(tween(600)) + slideInVertically(spring(Spring.DampingRatioLowBouncy, Spring.StiffnessLow)) { it / 3 }) {
-                Column {
-                    Box(Modifier.size(64.dp).clip(RoundedCornerShape(20.dp)).background(BrandGradient), contentAlignment = Alignment.Center) {
-                        Text("X", color = Color.White, style = MaterialTheme.typography.headlineLarge)
+    val x = Xyon.colors
+    BlueField {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val minPanel = maxHeight * 0.66f
+            Column(Modifier.fillMaxSize().systemBarsPadding().imePadding().verticalScroll(rememberScrollState())) {
+                var shown by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) { shown = true }
+                Column(Modifier.padding(horizontal = 24.dp).heightIn(min = 200.dp), verticalArrangement = Arrangement.Bottom) {
+                    if (onBack != null) {
+                        Box(Modifier.padding(top = 12.dp).size(46.dp).clip(CircleShape).background(Color.White).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", tint = InkBlack)
+                        }
+                        Spacer(Modifier.height(24.dp))
+                    } else Spacer(Modifier.height(48.dp))
+                    AnimatedVisibility(shown, enter = fadeIn(tween(500)) + slideInVertically(spring(Spring.DampingRatioLowBouncy, Spring.StiffnessLow)) { it / 2 }) {
+                        Column {
+                            Text(title, style = MaterialTheme.typography.displayMedium, color = Color.White)
+                            Text(subtitle, color = Color.White.copy(alpha = .85f), modifier = Modifier.padding(top = 8.dp, bottom = 22.dp))
+                        }
                     }
-                    Spacer(Modifier.height(24.dp))
-                    Text(title, style = MaterialTheme.typography.headlineLarge)
-                    Text(subtitle, color = Slate400, modifier = Modifier.padding(top = 4.dp))
-                    Spacer(Modifier.height(28.dp))
-                    GlassCard { Column(verticalArrangement = Arrangement.spacedBy(14.dp), content = content) }
+                }
+                AnimatedVisibility(shown, enter = fadeIn(tween(500, 150)) + slideInVertically(spring(Spring.DampingRatioLowBouncy, Spring.StiffnessLow)) { it / 3 }) {
+                    Column(
+                        Modifier.fillMaxWidth().heightIn(min = minPanel).clip(RoundedCornerShape(topStart = 40.dp, topEnd = 40.dp))
+                            .background(x.bg).padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp), content = content,
+                    )
                 }
             }
         }
@@ -61,7 +74,7 @@ fun LoginScreen(vm: SessionViewModel, onRegister: () -> Unit, onForgot: () -> Un
         XField(pass, { pass = it }, "Contraseña", password = true, leading = Icons.Filled.Lock)
         GradientButton("Iniciar sesión", { vm.doLogin(email, pass) }, Modifier.fillMaxWidth(), enabled = email.isNotBlank() && pass.length >= 8, loading = busy)
         TextButton(onForgot, Modifier.align(Alignment.CenterHorizontally)) { Text("¿Olvidaste tu contraseña?") }
-        HorizontalDivider(color = GlassStroke)
+        HorizontalDivider(color = Xyon.colors.outline.copy(alpha = .3f))
         TextButton(onRegister, Modifier.align(Alignment.CenterHorizontally)) { Text("¿Primera vez? Regístrate con tu código de invitación") }
     }
 }
@@ -124,17 +137,17 @@ fun LockScreen(vm: SessionViewModel) {
     var failed by remember { mutableStateOf(false) }
     fun ask() = promptBiometric(act, "Desbloquea Xyon", { vm.unlock() }, { failed = true })
     LaunchedEffect(Unit) { ask() }
-    AuroraBackground {
+    BlueField {
         Column(Modifier.fillMaxSize().systemBarsPadding().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             val t = rememberInfiniteTransition(label = "lock")
             val s by t.animateFloat(1f, 1.08f, infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "s")
-            Icon(Icons.Filled.Fingerprint, null, tint = Primary400, modifier = Modifier.size(96.dp).scale(s))
+            Icon(Icons.Filled.Fingerprint, null, tint = Lime, modifier = Modifier.size(120.dp).scale(s))
             Spacer(Modifier.height(16.dp))
-            Text("Sesión bloqueada", style = MaterialTheme.typography.headlineMedium)
-            Text("Usa tu huella, rostro o PIN", color = Slate400, textAlign = TextAlign.Center)
+            Text("Sesión bloqueada", style = MaterialTheme.typography.displayMedium, color = Color.White)
+            Text("Usa tu huella, rostro o PIN", color = Color.White.copy(alpha = .85f), textAlign = TextAlign.Center)
             Spacer(Modifier.height(32.dp))
-            GradientButton("Desbloquear", { ask() }, Modifier.fillMaxWidth())
-            TextButton({ vm.signOut() }) { Text(if (failed) "Cerrar sesión" else "Usar otra cuenta") }
+            XyonButton("Desbloquear", { ask() }, Modifier.fillMaxWidth(), style = XyonButtonStyle.Lime)
+            TextButton({ vm.signOut() }) { Text(if (failed) "Cerrar sesión" else "Usar otra cuenta", color = Color.White) }
         }
     }
 }

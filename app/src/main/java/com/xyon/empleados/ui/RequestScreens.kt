@@ -85,7 +85,7 @@ fun RequestsScreen(vm: VacationsViewModel = hiltViewModel(), snack: (String) -> 
         }
         ExtendedFloatingActionButton(
             onClick = { showForm = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 108.dp),
-            containerColor = Primary600, contentColor = Color.White,
+            containerColor = Lime, contentColor = InkBlack, shape = androidx.compose.foundation.shape.CircleShape,
             icon = { Icon(Icons.Filled.Add, null) }, text = { Text("Nueva") },
         )
     }

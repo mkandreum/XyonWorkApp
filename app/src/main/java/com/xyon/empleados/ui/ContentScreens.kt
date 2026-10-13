@@ -141,7 +141,7 @@ fun ProfileScreen(
     var edit by remember { mutableStateOf(false) }
     var pwd by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(16.dp).padding(bottom = 110.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        GlassCard(Modifier.fillMaxWidth().staggered(0), accent = Primary400) {
+        GlassCard(Modifier.fillMaxWidth().staggered(0), accent = Lime) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(user.name, 64)
                 Spacer(Modifier.width(14.dp))
