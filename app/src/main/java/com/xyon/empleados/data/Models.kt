@@ -15,6 +15,7 @@ data class User(
     val address: String? = null,
     val emergencyContact: String? = null,
     val joinDate: String? = null,
+    val active: Boolean = true,
 )
 
 @Serializable data class LoginRequest(val email: String, val password: String)
@@ -26,7 +27,7 @@ data class User(
 @Serializable data class EmailRequest(val email: String)
 @Serializable data class ResetPasswordRequest(val token: String, val email: String, val newPassword: String)
 @Serializable data class ChangePasswordRequest(val currentPassword: String, val newPassword: String)
-@Serializable data class MessageResponse(val message: String? = null, val error: String? = null)
+@Serializable data class MessageResponse(val message: String? = null, val error: String? = null, val code: String? = null)
 @Serializable data class UpdateProfileRequest(
     val phone: String? = null, val address: String? = null,
     val emergencyContact: String? = null, val avatarUrl: String? = null,

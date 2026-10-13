@@ -121,3 +121,64 @@ data class UpdateWidgetRequest(val label: String? = null, val isActive: Boolean?
 @Serializable data class ReorderRequest(val widgetOrders: List<WidgetOrder>)
 
 @Serializable data class OkResponse(val message: String? = null, val success: Boolean? = null)
+
+// ───────── Active toggle / bulk import ─────────
+
+@Serializable data class ActiveRequest(val active: Boolean)
+
+@Serializable data class ImportUsersRequest(val csv: String, val dryRun: Boolean, val sendInvites: Boolean)
+
+@Serializable
+data class ImportSummary(
+    val total: Int = 0, val created: Int = 0, val wouldCreate: Int = 0, val skipped: Int = 0,
+    val errors: Int = 0, val invitesSent: Int = 0,
+)
+@Serializable
+data class ImportRow(
+    val row: Int = 0, val email: String? = null, val status: String = "", val error: String? = null,
+    val inviteSent: Boolean = false, val userId: String? = null,
+)
+@Serializable
+data class ImportResponse(val dryRun: Boolean = false, val summary: ImportSummary = ImportSummary(), val results: List<ImportRow> = emptyList())
+
+// ───────── Manual fichajes ─────────
+
+@Serializable data class ManualFichajeRequest(val userId: String, val tipo: String, val timestamp: String, val reason: String)
+@Serializable data class ManualFichajeEdit(val reason: String, val tipo: String? = null, val timestamp: String? = null)
+@Serializable data class ManualFichajeResponse(val id: String = "", val dayClosed: Boolean = true)
+
+// ───────── Schedule overrides ─────────
+
+@Serializable
+data class ScheduleOverride(
+    val id: String = "", val department: String = "", val userId: String? = null, val scope: String = "DEPARTMENT",
+    val date: String = "", val dayOff: Boolean = false, val horaEntrada: String? = null, val horaSalida: String? = null,
+    val toleranciaMinutos: Int? = null, val note: String? = null,
+)
+@Serializable
+data class ScheduleOverrideRequest(
+    val date: String, val dayOff: Boolean, val userId: String? = null, val department: String? = null,
+    val horaEntrada: String? = null, val horaSalida: String? = null, val toleranciaMinutos: Int? = null, val note: String? = null,
+)
+
+// ───────── Team week ─────────
+
+@Serializable
+data class TeamAbsence(
+    val id: String = "", val type: String = "", val subtype: String? = null, val status: String = "",
+    val hours: Double? = null, val days: Double? = null,
+)
+@Serializable
+data class TeamDay(
+    val date: String = "", val fichajes: List<com.xyon.empleados.data.Fichaje> = emptyList(), val hours: Double = 0.0,
+    val isComplete: Boolean = false, val isLate: Boolean = false, val isEarlyDeparture: Boolean = false,
+    val validationMessage: String? = null, val vacations: List<TeamAbsence> = emptyList(),
+    val absences: List<TeamAbsence> = emptyList(), val shift: DepartmentShift? = null,
+    @SerialName("override") val ovr: ScheduleOverride? = null,
+)
+@Serializable data class TeamMember(val user: User = User(), val totalHours: Double = 0.0, val days: List<TeamDay> = emptyList())
+@Serializable
+data class TeamWeek(
+    val department: String = "", val weekStart: String = "", val weekEnd: String = "",
+    val days: List<String> = emptyList(), val members: List<TeamMember> = emptyList(),
+)

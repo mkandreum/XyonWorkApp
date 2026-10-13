@@ -54,6 +54,7 @@ class SessionViewModel @Inject constructor(
             else enter(cached)
         }
         viewModelScope.launch { store.sessionExpired.collect { signOut("Tu sesión ha caducado") } }
+        viewModelScope.launch { store.accountDisabled.collect { signOut(ACCOUNT_DISABLED_MSG) } }
     }
 
     /** Called after biometric success (or when biometrics disabled). */
@@ -119,7 +120,7 @@ class SessionViewModel @Inject constructor(
     }
 
     fun uploadAvatar(bytes: ByteArray, mime: String) = viewModelScope.launch {
-        val part = MultipartBody.Part.createFormData("avatars", "avatar", bytes.toRequestBody(mime.toMediaType()))
+        val part = uploadFilePart("avatars", bytes, mime, "avatar")
         safeCall { api.uploadAvatar(part) }.onSuccess {
             val url = it.url ?: it.fileUrl ?: it.path
             if (url != null) updateProfile(UpdateProfileRequest(avatarUrl = url))
@@ -171,7 +172,7 @@ class VacationsViewModel @Inject constructor(private val api: Api, lf: LoaderFac
         safeCall {
             var req = r
             if (file != null) {
-                val part = MultipartBody.Part.createFormData("justifications", "justificante", file.first.toRequestBody(file.second.toMediaType()))
+                val part = uploadFilePart("justifications", file.first, file.second, "justificante")
                 val up = api.uploadJustification(part)
                 req = r.copy(justificationUrl = up.url ?: up.fileUrl ?: up.path)
             }

@@ -18,6 +18,8 @@ interface AdminApi {
     @POST("admin/users") suspend fun createUser(@Body b: CreateUserRequest): User
     @PUT("admin/users/{id}") suspend fun updateUser(@Path("id") id: String, @Body b: UpdateUserRequest): User
     @DELETE("admin/users/{id}") suspend fun deleteUser(@Path("id") id: String): ResponseBody
+    @PATCH("admin/users/{id}/active") suspend fun setActive(@Path("id") id: String, @Body b: ActiveRequest): User
+    @POST("admin/users/import") suspend fun importUsers(@Body b: ImportUsersRequest): ImportResponse
     @POST("auth/forgot-password") suspend fun forgot(@Body b: ForgotRequest): MessageResponse
 
     // Settings / departments
@@ -47,7 +49,14 @@ interface AdminApi {
     @GET("fichajes/history") suspend fun history(@Query("userId") userId: String, @Query("startDate") start: String, @Query("endDate") end: String): List<Fichaje>
     @GET("fichajes/week/{id}") suspend fun week(@Path("id") id: String): List<FichajeDayStats>
     @GET("fichajes/month/{id}") suspend fun month(@Path("id") id: String): List<FichajeDayStats>
-    @GET("fichajes/report") suspend fun report(@Query("month") m: Int, @Query("year") y: Int, @Query("userId") userId: String?): ResponseBody
+    @GET("fichajes/report") suspend fun report(@Query("month") m: Int, @Query("year") y: Int, @Query("userId") userId: String?, @Query("department") department: String?): ResponseBody
+    @POST("fichajes/manual") suspend fun manualCreate(@Body b: ManualFichajeRequest): ManualFichajeResponse
+    @PUT("fichajes/manual/{id}") suspend fun manualUpdate(@Path("id") id: String, @Body b: ManualFichajeEdit): ManualFichajeResponse
+    @DELETE("fichajes/manual/{id}") suspend fun manualDelete(@Path("id") id: String, @Query("reason") reason: String): ResponseBody
+    @GET("schedule-overrides") suspend fun overrides(@Query("department") department: String?, @Query("userId") userId: String?, @Query("from") from: String?, @Query("to") to: String?): List<ScheduleOverride>
+    @PUT("schedule-overrides") suspend fun setOverride(@Body b: ScheduleOverrideRequest): ScheduleOverride
+    @DELETE("schedule-overrides/{id}") suspend fun deleteOverride(@Path("id") id: String): ResponseBody
+    @GET("team/week") suspend fun teamWeek(@Query("department") department: String?, @Query("weekStart") weekStart: String?): TeamWeek
     @POST("late-notifications") suspend fun lateNotify(@Body b: LateNotificationRequest): ResponseBody
     @GET("late-notifications/sent") suspend fun lateSent(): List<LateNotification>
 

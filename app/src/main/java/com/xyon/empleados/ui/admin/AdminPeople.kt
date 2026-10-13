@@ -34,13 +34,15 @@ class AdminUsersVm @Inject constructor(private val api: AdminApi, lf: LoaderFact
     fun create(r: CreateUserRequest) = act("Usuario creado", { api.createUser(r) }) { users.refresh() }
     fun update(id: String, r: UpdateUserRequest) = act("Usuario actualizado", { api.updateUser(id, r) }) { users.refresh() }
     fun delete(id: String) = act("Usuario eliminado", { api.deleteUser(id) }) { users.refresh() }
+    fun setActive(id: String, active: Boolean) =
+        act(if (active) "Usuario reactivado" else "Usuario desactivado", { api.setActive(id, ActiveRequest(active)) }) { users.refresh() }
     fun resetPassword(email: String) = act("Enlace de restablecimiento enviado a $email", { api.forgot(ForgotRequest(email)) })
 }
 
 private val ROLES = listOf("EMPLOYEE" to "Empleado", "MANAGER" to "Responsable", "ADMIN" to "Administrador")
 
 @Composable
-fun AdminUsersScreen(onBack: () -> Unit, snack: (String) -> Unit, vm: AdminUsersVm = hiltViewModel()) {
+fun AdminUsersScreen(onBack: () -> Unit, snack: (String) -> Unit, onImport: () -> Unit, vm: AdminUsersVm = hiltViewModel()) {
     val st by vm.users.state.collectAsState()
     val deps by vm.departments.collectAsState()
     var q by remember { mutableStateOf("") }
@@ -50,15 +52,22 @@ fun AdminUsersScreen(onBack: () -> Unit, snack: (String) -> Unit, vm: AdminUsers
     var creating by remember { mutableStateOf(false) }
     var del by remember { mutableStateOf<User?>(null) }
     var reset by remember { mutableStateOf<User?>(null) }
+    var toggle by remember { mutableStateOf<User?>(null) }
+    var state by remember { mutableStateOf("") }
 
     AdminPage("Usuarios", "Alta, edición y roles", onBack, vm, snack,
-        actions = { IconAction(Icons.Filled.PersonAdd, "Nuevo usuario") { creating = true } }) {
+        actions = {
+            IconAction(Icons.Filled.UploadFile, "Importar CSV") { onImport() }
+            IconAction(Icons.Filled.PersonAdd, "Nuevo usuario") { creating = true }
+        }) {
         SearchField(q, { q = it }, "Buscar por nombre o email")
         ChipsRow(listOf("" to "Todos") + ROLES, role, { role = it })
+        ChipsRow(listOf("" to "Todos los estados", "active" to "Activos", "inactive" to "Inactivos"), state, { state = it })
         if (deps.isNotEmpty()) ChipsRow(listOf("" to "Todos los dptos.") + deps.map { it to it }, dept, { dept = it })
         LoadScreen(st, { vm.users.refresh() }) { all ->
             val list = all.filter {
                 (role.isBlank() || it.role == role) && (dept.isBlank() || it.department == dept) &&
+                    (state.isBlank() || (state == "active") == it.active) &&
                     (q.isBlank() || it.name.contains(q, true) || it.email.contains(q, true))
             }
             ListScreenColumn {
@@ -70,12 +79,16 @@ fun AdminUsersScreen(onBack: () -> Unit, snack: (String) -> Unit, vm: AdminUsers
                             Column(Modifier.weight(1f)) {
                                 Text(u.name, style = MaterialTheme.typography.titleMedium)
                                 Muted("${u.email} · ${u.department}")
-                                StatusChip(ROLES.firstOrNull { it.first == u.role }?.second ?: u.role,
-                                    when (u.role) { "ADMIN" -> Tone.Danger; "MANAGER" -> Tone.Warning; else -> Tone.Neutral })
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    StatusChip(ROLES.firstOrNull { it.first == u.role }?.second ?: u.role,
+                                        when (u.role) { "ADMIN" -> Tone.Danger; "MANAGER" -> Tone.Warning; else -> Tone.Neutral })
+                                    if (!u.active) StatusChip("Inactivo", Tone.Danger)
+                                }
                             }
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                             IconAction(Icons.Filled.LockReset, "Restablecer contraseña") { reset = u }
+                            IconAction(if (u.active) Icons.Filled.PersonOff else Icons.Filled.HowToReg, if (u.active) "Desactivar" else "Reactivar") { toggle = u }
                             IconAction(Icons.Filled.Edit, "Editar") { form = u }
                             IconAction(Icons.Filled.Delete, "Eliminar", danger = true) { del = u }
                         }
@@ -116,6 +129,13 @@ fun AdminUsersScreen(onBack: () -> Unit, snack: (String) -> Unit, vm: AdminUsers
         }
     }
     del?.let { ConfirmDialog("¿Eliminar a ${it.name}? Se borrarán también sus datos asociados.", onConfirm = { vm.delete(it.id) }, onDismiss = { del = null }) }
+    toggle?.let { u ->
+        ConfirmDialog(
+            if (u.active) "¿Desactivar a ${u.name}? No podrá iniciar sesión y su sesión actual se cerrará. Sus datos se conservan."
+            else "¿Reactivar a ${u.name}? Podrá volver a iniciar sesión.",
+            if (u.active) "Desactivar" else "Reactivar",
+            onConfirm = { vm.setActive(u.id, !u.active) }, onDismiss = { toggle = null })
+    }
     reset?.let { ConfirmDialog("Se enviará un email de restablecimiento de contraseña a ${it.email}.", "Enviar", onConfirm = { vm.resetPassword(it.email) }, onDismiss = { reset = null }) }
 }
 

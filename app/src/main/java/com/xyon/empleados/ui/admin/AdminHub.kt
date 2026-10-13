@@ -42,6 +42,8 @@ private val TOOLS = listOf(
     Tool("abs", "Ausencias", Icons.Filled.EventBusy, Warning, adminOnly = false),
     Tool("adjust", "Ajustes de fichaje", Icons.Filled.EditCalendar, Cyan, adminOnly = false),
     Tool("fichajes", "Fichajes", Icons.Filled.AccessTime, Primary400, adminOnly = false),
+    Tool("teamweek", "Semana del equipo", Icons.Filled.Groups, Success, adminOnly = false),
+    Tool("overrides", "Excepciones de horario", Icons.Filled.DateRange, Violet, adminOnly = false),
     Tool("late", "Avisos de retraso", Icons.Filled.NotificationsActive, Warning, adminOnly = false),
     Tool("shifts", "Turnos y horarios", Icons.Filled.Schedule, Violet),
     Tool("assign", "Asignar turnos", Icons.Filled.CalendarMonth, Cyan, adminOnly = false),
@@ -92,7 +94,10 @@ fun NavGraphBuilder.adminRoutes(nav: NavHostController, user: User, snack: (Stri
     val open: (String) -> Unit = { nav.navigate("adm/$it") { launchSingleTop = true } }
     composable("admin") { AdminHubScreen(user, back, open, snack) }
     composable("team") { AdminHubScreen(user, back, open, snack) }
-    composable("adm/users") { AdminUsersScreen(back, snack) }
+    composable("adm/users") { AdminUsersScreen(back, snack, onImport = { open("import") }) }
+    composable("adm/import") { AdminImportScreen(back, snack) }
+    composable("adm/teamweek") { AdminTeamWeekScreen(admin, back, snack) }
+    composable("adm/overrides") { AdminOverridesScreen(admin, user.department, back, snack) }
     composable("adm/departments") { AdminDepartmentsScreen(back, snack) }
     composable("adm/vac") { AdminRequestsScreen("vac", !admin, back, snack) }
     composable("adm/abs") { AdminRequestsScreen("abs", !admin, back, snack) }

@@ -71,6 +71,9 @@ class SessionStore @Inject constructor(@ApplicationContext private val ctx: Cont
     /** Emits when the server rejects our token (401/403). */
     val sessionExpired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
+    /** Emits when the server reports ACCOUNT_DISABLED for an already-issued token. */
+    val accountDisabled = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
     suspend fun load(): Boolean {
         token = ctx.sessionDs.data.first()[tokenKey]?.let { KeystoreCipher.decrypt(it) }
         return token != null

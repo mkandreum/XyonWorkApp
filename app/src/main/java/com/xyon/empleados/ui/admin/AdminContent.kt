@@ -33,8 +33,7 @@ import java.time.LocalDate
 import javax.inject.Inject
 
 private fun filePart(field: String, bytes: ByteArray, mime: String): MultipartBody.Part {
-    val ext = when { mime.contains("png") -> "png"; mime.contains("gif") -> "gif"; mime.contains("pdf") -> "pdf"; else -> "jpg" }
-    return MultipartBody.Part.createFormData(field, "upload.$ext", bytes.toRequestBody(mime.toMediaType()))
+    return uploadFilePart(field, bytes, mime)
 }
 
 // ───────────────────────── Events ─────────────────────────

@@ -30,7 +30,10 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import javax.inject.Inject
 
 // ───────────────────────── Fichajes per user + report ─────────────────────────
@@ -70,10 +73,22 @@ class AdminFichajesVm @Inject constructor(private val api: AdminApi, private val
         act("Aviso de retraso enviado", { api.lateNotify(LateNotificationRequest(userId, f.id, d.date.take(10))) })
     }
 
-    fun export(userId: String?, month: Int, year: Int, who: String) = act("Informe generado", {
-        val bytes = api.report(month, year, userId).bytes()
+    fun export(userId: String?, department: String?, month: Int, year: Int, who: String) = act("Informe generado", {
+        val bytes = api.report(month, year, userId, department).bytes()
         _csv.tryEmit(bytes to "asistencia_${who}_${year}_${"%02d".format(month)}.csv")
     })
+
+    fun manualCreate(userId: String, tipo: String, ts: String, reason: String) =
+        act("Fichaje añadido", { api.manualCreate(ManualFichajeRequest(userId, tipo, ts, reason)) }) {
+            if (!it.dayClosed) say("El día queda abierto: añade la pareja ENTRADA/SALIDA")
+            reload()
+        }
+    fun manualUpdate(id: String, tipo: String?, ts: String?, reason: String) =
+        act("Fichaje modificado", { api.manualUpdate(id, ManualFichajeEdit(reason, tipo, ts)) }) {
+            if (!it.dayClosed) say("El día queda abierto: revisa la secuencia ENTRADA/SALIDA")
+            reload()
+        }
+    fun manualDelete(id: String, reason: String) = act("Fichaje eliminado", { api.manualDelete(id, reason) }) { reload() }
 }
 
 @Composable
@@ -84,6 +99,8 @@ fun AdminFichajesScreen(admin: Boolean, onBack: () -> Unit, snack: (String) -> U
     var uid by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf("week") }
     var exportOpen by remember { mutableStateOf(false) }
+    var manual by remember { mutableStateOf<ManualTarget?>(null) }
+    var deleting by remember { mutableStateOf<Fichaje?>(null) }
     LaunchedEffect(Unit) { vm.loadPeople(admin) }
     LaunchedEffect(uid, mode) { if (uid.isNotBlank()) vm.load(uid, mode) }
     LaunchedEffect(Unit) {
@@ -96,7 +113,10 @@ fun AdminFichajesScreen(admin: Boolean, onBack: () -> Unit, snack: (String) -> U
         }
     }
     AdminPage("Fichajes", if (admin) "Todos los empleados" else "Tu equipo", onBack, vm, snack,
-        actions = { IconAction(Icons.Filled.FileDownload, "Exportar informe") { exportOpen = true } }) {
+        actions = {
+            if (uid.isNotBlank()) IconAction(Icons.Filled.AddCircle, "Añadir fichaje") { manual = ManualTarget(null, LocalDate.now().toString()) }
+            IconAction(Icons.Filled.FileDownload, "Exportar informe") { exportOpen = true }
+        }) {
         LoadScreen(people, { vm.loadPeople(admin) }) { list ->
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
@@ -112,7 +132,6 @@ fun AdminFichajesScreen(admin: Boolean, onBack: () -> Unit, snack: (String) -> U
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
                                         Text(fmtDate(d.date), style = MaterialTheme.typography.titleMedium)
-                                        Muted(d.fichajes.joinToString("  ") { "${if (it.tipo == "ENTRADA") "E" else "S"} ${fmtTimeOf(it.timestamp)}" }.ifBlank { "Sin fichajes" })
                                         Muted("%.1f h trabajadas".format(d.horasTrabajadas))
                                     }
                                     Column(horizontalAlignment = Alignment.End) {
@@ -121,7 +140,18 @@ fun AdminFichajesScreen(admin: Boolean, onBack: () -> Unit, snack: (String) -> U
                                         if (!d.isComplete && d.fichajes.isNotEmpty()) StatusChip("Incompleto", Tone.Neutral)
                                     }
                                 }
-                                if (d.isLate) TextButton({ vm.warnLate(uid, d) }) { Text("Enviar aviso de retraso") }
+                                if (d.fichajes.isEmpty()) Muted("Sin fichajes")
+                                d.fichajes.forEach { f ->
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("${if (f.tipo == "ENTRADA") "Entrada" else "Salida"}  ${fmtTimeOf(f.timestamp)}", Modifier.weight(1f))
+                                        IconAction(Icons.Filled.Edit, "Editar fichaje") { manual = ManualTarget(f, d.date.take(10)) }
+                                        IconAction(Icons.Filled.Delete, "Eliminar fichaje", danger = true) { deleting = f }
+                                    }
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    if (d.isLate) TextButton({ vm.warnLate(uid, d) }) { Text("Enviar aviso de retraso") } else Spacer(Modifier.width(1.dp))
+                                    TextButton({ manual = ManualTarget(null, d.date.take(10)) }) { Text("Añadir fichaje") }
+                                }
                             }
                         }
                     }
@@ -131,19 +161,75 @@ fun AdminFichajesScreen(admin: Boolean, onBack: () -> Unit, snack: (String) -> U
     }
     if (exportOpen) {
         val now = LocalDate.now()
+        val persons = people.data ?: emptyList()
+        val person = persons.firstOrNull { it.id == uid }
+        val deptNames = persons.map { it.department }.filter { it.isNotBlank() }.distinct().sorted()
+        var scope by remember { mutableStateOf(if (uid.isNotBlank()) "user" else if (deptNames.isNotEmpty()) "dept" else "me") }
+        var dept by remember { mutableStateOf(person?.department?.takeIf { it.isNotBlank() } ?: deptNames.firstOrNull() ?: "") }
         var m by remember { mutableStateOf(now.monthValue.toString()) }
         var y by remember { mutableStateOf(now.year.toString()) }
-        val person = people.data?.firstOrNull { it.id == uid }
-        FormDialog("Exportar informe CSV", "Exportar", y.toIntOrNull() != null && (!admin || true), {
-            // Backend only honours userId for admins; managers get their own report.
-            vm.export(if (admin && uid.isNotBlank()) uid else null, m.toInt(), y.toInt(), person?.name ?: "propio"); exportOpen = false
+        val scopes = buildList {
+            if (uid.isNotBlank()) add("user" to "Empleado: ${person?.name ?: ""}")
+            if (deptNames.isNotEmpty()) add("dept" to "Todo el departamento")
+            if (admin) add("me" to "Mi propio informe")
+        }
+        val ok = y.toIntOrNull() != null && scopes.isNotEmpty() && (scope != "dept" || dept.isNotBlank()) && (scope != "user" || uid.isNotBlank())
+        FormDialog("Exportar informe CSV", "Exportar", ok, {
+            val who = when (scope) { "user" -> person?.name ?: "empleado"; "dept" -> dept; else -> "propio" }
+            vm.export(if (scope == "user") uid else null, if (scope == "dept") dept else null, m.toInt(), y.toInt(), who)
+            exportOpen = false
         }, { exportOpen = false }) {
-            Muted(if (admin) (person?.let { "Empleado: ${it.name}" } ?: "Sin empleado seleccionado: se exporta tu propio informe") else "Se exporta tu propio informe (limitación del servidor).")
+            if (scopes.isEmpty()) Muted("No hay empleados disponibles para exportar.")
+            else Dropdown("Alcance", scope, scopes, { scope = it })
+            if (scope == "dept" && admin) Dropdown("Departamento", dept, deptNames.map { it to it }, { dept = it })
+            if (scope == "dept" && !admin) Muted("Departamento: $dept")
             Dropdown("Mes", m, MONTHS_ES.mapIndexed { i, n -> (i + 1).toString() to n }, { m = it })
             XField(y, { y = it }, "Año", keyboard = androidx.compose.ui.text.input.KeyboardType.Number)
         }
     }
+    manual?.let { target ->
+        val f = target.f
+        val zone = ZoneId.systemDefault()
+        val init = f?.let { runCatching { Instant.parse(it.timestamp).atZone(zone) }.getOrNull() }
+        var tipo by remember(target) { mutableStateOf(f?.tipo ?: "ENTRADA") }
+        var date by remember(target) { mutableStateOf(init?.toLocalDate()?.toString() ?: target.date) }
+        var time by remember(target) { mutableStateOf(init?.let { "%02d:%02d".format(it.hour, it.minute) } ?: "") }
+        var reason by remember(target) { mutableStateOf("") }
+        val ts: Instant? = if (TIME_RE.matches(time)) runCatching {
+            val parts = time.split(":").map { it.toInt() }
+            ZonedDateTime.of(LocalDate.parse(date), LocalTime.of(parts[0], parts[1]), zone).toInstant()
+        }.getOrNull() else null
+        val future = ts != null && ts.isAfter(Instant.now())
+        val tsChanged = ts != null && ts != init?.toInstant()
+        val changed = f == null || tipo != f.tipo || tsChanged
+        val rOk = reason.trim().length in 3..500
+        FormDialog(if (f == null) "Añadir fichaje" else "Editar fichaje", if (f == null) "Añadir" else "Guardar",
+            ts != null && !future && rOk && changed, {
+                if (f == null) vm.manualCreate(uid, tipo, ts.toString(), reason.trim())
+                else vm.manualUpdate(f.id, tipo.takeIf { it != f.tipo }, ts.toString().takeIf { tsChanged }, reason.trim())
+                manual = null
+            }, { manual = null }) {
+            people.data?.firstOrNull { it.id == uid }?.let { Muted("Empleado: ${it.name}") }
+            Dropdown("Tipo", tipo, listOf("ENTRADA" to "Entrada", "SALIDA" to "Salida"), { tipo = it })
+            DateField("Fecha", date, { date = it })
+            XField(time, { time = it }, "Hora (HH:mm)", error = if (time.isNotEmpty() && ts == null) "Formato HH:mm" else if (future) "No puede ser futura" else null)
+            XField(reason, { reason = it }, "Motivo (obligatorio, 3-500 caracteres)", singleLine = false, minLines = 2,
+                error = if (reason.isNotEmpty() && !rOk) "Entre 3 y 500 caracteres" else null)
+            Muted("La modificación queda auditada y se notifica al empleado.")
+        }
+    }
+    deleting?.let { f ->
+        var reason by remember(f) { mutableStateOf("") }
+        val rOk = reason.trim().length in 3..500
+        FormDialog("Eliminar fichaje", "Eliminar", rOk, { vm.manualDelete(f.id, reason.trim()); deleting = null }, { deleting = null }) {
+            Text("¿Eliminar el fichaje de ${if (f.tipo == "ENTRADA") "entrada" else "salida"} de las ${fmtTimeOf(f.timestamp)}? Esta acción queda auditada y se notifica al empleado.")
+            XField(reason, { reason = it }, "Motivo (obligatorio)", singleLine = false, minLines = 2,
+                error = if (reason.isNotEmpty() && !rOk) "Entre 3 y 500 caracteres" else null)
+        }
+    }
 }
+
+private data class ManualTarget(val f: Fichaje?, val date: String)
 
 // ───────────────────────── Late notifications sent ─────────────────────────
 

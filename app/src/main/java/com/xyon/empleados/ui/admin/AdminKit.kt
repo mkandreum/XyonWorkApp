@@ -101,6 +101,36 @@ fun Dropdown(label: String, value: String, options: List<Pair<String, String>>, 
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DateField(label: String, value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    var open by remember { mutableStateOf(false) }
+    Column(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(1.dp, GlassStroke, RoundedCornerShape(16.dp))
+            .clickable { open = true }.padding(horizontal = 16.dp, vertical = 10.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(value.ifBlank { "Seleccionar fecha" }, Modifier.weight(1f))
+            Icon(Icons.Filled.CalendarMonth, null)
+        }
+    }
+    if (open) {
+        val init = runCatching { java.time.LocalDate.parse(value).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli() }.getOrNull()
+        val st = rememberDatePickerState(initialSelectedDateMillis = init)
+        DatePickerDialog(
+            { open = false },
+            confirmButton = {
+                TextButton({
+                    st.selectedDateMillis?.let { onChange(java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()) }
+                    open = false
+                }) { Text("Aceptar") }
+            },
+            dismissButton = { TextButton({ open = false }) { Text("Cancelar") } },
+        ) { DatePicker(st) }
+    }
+}
+
 @Composable
 fun SearchField(value: String, onChange: (String) -> Unit, label: String = "Buscar") {
     Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { XField(value, onChange, label, leading = Icons.Filled.Search) }

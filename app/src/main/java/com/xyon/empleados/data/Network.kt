@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.HttpException
 import retrofit2.Retrofit
 import java.io.IOException
@@ -45,8 +46,13 @@ object NetworkModule {
                 }
                 val resp = chain.proceed(b.build())
                 val isAuthCall = req.url.encodedPath.contains("/auth/")
-                if (resp.code == 401 && !isAuthCall && session.token != null) {
-                    session.sessionExpired.tryEmit(Unit)
+                if ((resp.code == 401 || resp.code == 403) && !isAuthCall && session.token != null) {
+                    val body = runCatching { resp.peekBody(4096).string() }.getOrDefault("")
+                    when {
+                        body.contains("ACCOUNT_DISABLED") -> session.accountDisabled.tryEmit(Unit)
+                        resp.code == 401 || body.contains("TOKEN_EXPIRED") || body.contains("INVALID_TOKEN") ->
+                            session.sessionExpired.tryEmit(Unit)
+                    }
                 }
                 resp
             }
@@ -68,8 +74,9 @@ object NetworkModule {
 fun Throwable.userMessage(): String = when (this) {
     is HttpException -> {
         val raw = runCatching { response()?.errorBody()?.string() }.getOrNull()
-        val msg = raw?.let { runCatching { AppJson.decodeFromString<MessageResponse>(it).error }.getOrNull() }
-        msg ?: when (code()) {
+        val parsed = raw?.let { runCatching { AppJson.decodeFromString<MessageResponse>(it) }.getOrNull() }
+        if (parsed?.code == "ACCOUNT_DISABLED") ACCOUNT_DISABLED_MSG
+        else parsed?.error ?: when (code()) {
             401 -> "Credenciales o sesión no válidas"
             403 -> "No tienes permiso para esta acción"
             429 -> "Demasiados intentos. Inténtalo más tarde"
@@ -79,6 +86,19 @@ fun Throwable.userMessage(): String = when (this) {
     }
     is IOException -> "Sin conexión. Mostrando datos guardados."
     else -> message ?: "Error inesperado"
+}
+
+const val ACCOUNT_DISABLED_MSG = "Tu cuenta está desactivada. Contacta con administración."
+
+/** Multipart file part whose filename carries an extension derived from the mime type. */
+fun uploadFilePart(field: String, bytes: ByteArray, mime: String, baseName: String = "upload"): okhttp3.MultipartBody.Part {
+    val m = mime.lowercase()
+    val ext = when {
+        m.contains("png") -> "png"; m.contains("gif") -> "gif"; m.contains("webp") -> "webp"
+        m.contains("pdf") -> "pdf"; else -> "jpg"
+    }
+    val type = runCatching { mime.toMediaType() }.getOrNull() ?: "application/octet-stream".toMediaType()
+    return okhttp3.MultipartBody.Part.createFormData(field, "$baseName.$ext", bytes.toRequestBody(type))
 }
 
 val Throwable.isOffline get() = this is IOException
