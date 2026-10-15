@@ -62,5 +62,6 @@ dependencies {
     implementation(libs.datastore)
     implementation(libs.biometric)
     implementation(libs.coil)
+    implementation(libs.androidx.work)
     debugImplementation(libs.androidx.ui.tooling)
 }

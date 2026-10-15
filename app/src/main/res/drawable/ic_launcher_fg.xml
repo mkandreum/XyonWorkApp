@@ -1,3 +1,50 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FFFFFF" android:pathData="M34,34 L46,34 L54,48 L62,34 L74,34 L60,54 L74,74 L62,74 L54,60 L46,74 L34,74 L48,54 Z" />
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Xyon mark: a person made of two crossing rounded bars (blue behind, teal in front) and a round head.
+     Drawn on the 1254-unit grid of the original artwork; content stays inside the adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="1254" android:viewportHeight="1254">
+
+    <!-- Blue bar: top-left to bottom-right -->
+    <path android:pathData="M368,398L888,872"
+        android:strokeWidth="164" android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear"
+                android:startX="300" android:startY="330" android:endX="960" android:endY="940">
+                <item android:offset="0" android:color="#FF1E86FF" />
+                <item android:offset="0.5" android:color="#FF0A3BEB" />
+                <item android:offset="1" android:color="#FF1E8CFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Soft shadow of the teal bar over the blue one -->
+    <path android:pathData="M372,882L892,410"
+        android:strokeWidth="176" android:strokeLineCap="round"
+        android:strokeColor="#40000A2E" />
+
+    <!-- Teal bar: bottom-left to top-right (in front) -->
+    <path android:pathData="M366,870L886,398"
+        android:strokeWidth="164" android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear"
+                android:startX="300" android:startY="940" android:endX="960" android:endY="330">
+                <item android:offset="0" android:color="#FF14EED8" />
+                <item android:offset="0.5" android:color="#FF10D2DC" />
+                <item android:offset="1" android:color="#FF2CF2DC" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Head -->
+    <path android:pathData="M627,357m-85,0a85,85 0,1 1,170 0a85,85 0,1 1,-170 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="627" android:startY="272" android:endX="627" android:endY="442">
+                <item android:offset="0" android:color="#FF00E8FF" />
+                <item android:offset="1" android:color="#FF1872FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
 </vector>

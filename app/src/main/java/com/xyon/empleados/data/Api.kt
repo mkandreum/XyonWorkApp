@@ -36,6 +36,8 @@ interface Api {
     // Vacations / absences
     @GET("vacations") suspend fun vacations(): List<VacationRequest>
     @POST("vacations") suspend fun createVacation(@Body b: CreateVacationRequest): VacationRequest
+    @DELETE("vacations/{id}") suspend fun cancelVacation(@Path("id") id: String): OkResponse
+    @GET("vacations/overlap") suspend fun vacationOverlap(@Query("startDate") start: String, @Query("endDate") end: String): OverlapResponse
     @GET("benefits/user") suspend fun myBalance(): UserBenefitsBalance
     @GET("benefits/department/{d}") suspend fun departmentBenefits(@Path("d") d: String): DepartmentBenefits
 

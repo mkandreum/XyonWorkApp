@@ -14,6 +14,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewModelScope
 import com.xyon.empleados.data.*
 import com.xyon.empleados.data.admin.*
+import com.xyon.empleados.ui.theme.*
 import com.xyon.empleados.ui.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -233,6 +234,23 @@ class AdminRequestsVm @Inject constructor(private val api: AdminApi, lf: LoaderF
     fun setAdmin(id: String, status: String) = act(if (status == "APPROVED") "Solicitud aprobada" else "Solicitud rechazada", { api.vacationStatus(id, StatusRequest(status)) }) { admin.refresh() }
     fun managerApprove(id: String) = act("Aprobada (pasa a administración)", { api.managerApprove(id) }) { team.refresh() }
     fun managerReject(id: String) = act("Solicitud rechazada", { api.managerReject(id) }) { team.refresh() }
+
+    /** Approve or reject several requests at once; reports how many failed. */
+    fun bulk(ids: List<String>, approve: Boolean, manager: Boolean, done: () -> Unit) = act(
+        if (approve) "${ids.size} aprobadas" else "${ids.size} rechazadas",
+        {
+            val failed = ids.count { id ->
+                safeCall {
+                    when {
+                        manager && approve -> api.managerApprove(id)
+                        manager -> api.managerReject(id)
+                        else -> api.vacationStatus(id, StatusRequest(if (approve) "APPROVED" else "REJECTED"))
+                    }
+                }.isFailure
+            }
+            if (failed > 0) error("$failed no se pudieron actualizar")
+        },
+    ) { if (manager) team.refresh() else admin.refresh(); done() }
 }
 
 /** kind: "vac" (only VACATION), "abs" (everything else), "all". manager=true uses the department-limited endpoints. */
@@ -242,7 +260,11 @@ fun AdminRequestsScreen(kind: String, manager: Boolean, onBack: () -> Unit, snac
     var status by remember { mutableStateOf("PENDING") }
     var q by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf<VacationRequest?>(null) }
+    var selected by remember { mutableStateOf(setOf<String>()) }
+    var confirmBulkReject by remember { mutableStateOf(false) }
+    val busy by vm.busy.collectAsState()
     val title = when (kind) { "vac" -> "Vacaciones"; "abs" -> "Ausencias"; else -> "Solicitudes" }
+    fun canAct(v: VacationRequest) = if (manager) v.status == "PENDING_MANAGER" || v.status == "PENDING" else v.status.startsWith("PENDING")
     AdminPage(title, if (manager) "Tu equipo" else "Aprobación de solicitudes", onBack, vm, snack) {
         SearchField(q, { q = it }, "Buscar empleado")
         ChipsRow(listOf("PENDING" to "Pendientes", "APPROVED" to "Aprobadas", "REJECTED" to "Rechazadas", "" to "Todas"), status, { status = it })
@@ -252,11 +274,21 @@ fun AdminRequestsScreen(kind: String, manager: Boolean, onBack: () -> Unit, snac
                     (status.isBlank() || (status == "PENDING" && it.status.startsWith("PENDING")) || it.status == status) &&
                     (q.isBlank() || (it.user?.name ?: "").contains(q, true))
             }.sortedByDescending { it.createdAt ?: it.startDate }
+            val actionable = list.filter(::canAct)
+            Box(Modifier.fillMaxSize()) {
             ListScreenColumn {
                 if (list.isEmpty()) item { EmptyState(Icons.Filled.Inbox, "Sin solicitudes") }
+                if (actionable.size > 1) item {
+                    val all = actionable.all { it.id in selected }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(all, { selected = if (all) emptySet() else actionable.map { it.id }.toSet() })
+                        Text("Seleccionar las ${actionable.size} pendientes", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                    }
+                }
                 items(list, key = { it.id }) { v ->
-                    GlassCard(Modifier.fillMaxWidth()) {
+                    XyonCard(Modifier.fillMaxWidth(), accent = if (v.id in selected) Lime else null) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (canAct(v)) Checkbox(v.id in selected, { on -> selected = if (on) selected + v.id else selected - v.id })
                             Column(Modifier.weight(1f)) {
                                 Text(v.user?.name ?: "—", style = MaterialTheme.typography.titleMedium)
                                 Muted("${typeLabel(v.type)}${v.subtype?.let { " · $it" } ?: ""} · ${v.user?.department ?: ""}")
@@ -264,14 +296,31 @@ fun AdminRequestsScreen(kind: String, manager: Boolean, onBack: () -> Unit, snac
                             }
                             StatusChip(statusLabel(v.status), statusTone(v.status))
                         }
-                        val canAct = if (manager) v.status == "PENDING_MANAGER" else v.status.startsWith("PENDING")
-                        if (canAct) ApproveRejectRow(
+                        if (canAct(v) && v.id !in selected) ApproveRejectRow(
                             onApprove = { if (manager) vm.managerApprove(v.id) else vm.setAdmin(v.id, "APPROVED") },
                             onReject = { confirm = v })
                     }
                 }
             }
+            // Bulk action bar while something is selected
+            androidx.compose.animation.AnimatedVisibility(
+                selected.isNotEmpty(), Modifier.align(Alignment.BottomCenter).padding(bottom = 110.dp, start = 16.dp, end = 16.dp),
+                enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    XyonButton("Aprobar ${selected.size}", { vm.bulk(selected.toList(), true, manager) { selected = emptySet() } },
+                        Modifier.weight(1f), style = XyonButtonStyle.Lime, loading = busy, icon = Icons.Filled.Check)
+                    XyonButton("Rechazar", { confirmBulkReject = true }, Modifier.weight(1f), style = XyonButtonStyle.Ink, enabled = !busy, icon = Icons.Filled.Close)
+                }
+            }
+            }
         }
+    }
+    if (confirmBulkReject) {
+        ConfirmDialog("¿Rechazar ${selected.size} ${if (selected.size == 1) "solicitud" else "solicitudes"}?", "Rechazar",
+            onConfirm = { vm.bulk(selected.toList(), false, manager) { selected = emptySet() }; confirmBulkReject = false },
+            onDismiss = { confirmBulkReject = false })
     }
     confirm?.let { v ->
         ConfirmDialog("¿Rechazar la solicitud de ${v.user?.name ?: "este empleado"}?", "Rechazar",

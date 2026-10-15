@@ -89,6 +89,8 @@ data class TurnoInfo(
 @Serializable
 data class FichajeStatus(
     val hasActiveEntry: Boolean = false, val currentFichaje: Fichaje? = null, val turno: TurnoInfo? = null,
+    /** Entry from a previous day with no exit afterwards (forgot to clock out). */
+    val missingExit: Fichaje? = null,
 )
 @Serializable
 data class CreateFichajeRequest(
@@ -128,8 +130,9 @@ data class DepartmentBenefits(
 
 @Serializable
 data class AdminStats(
-    val totalUsers: Int = 0, val activeUsers: Int = 0, val pendingVacations: Int = 0,
-    val totalPayrollAmount: Double = 0.0,
+    // Same keys as GET /admin/stats (statsController.getAdminStats)
+    val totalEmployees: Int = 0, val pendingRequests: Int = 0, val approvedThisMonth: Int = 0,
+    val payrollsProcessed: Int = 0,
 )
 @Serializable
 data class InvitationCode(
@@ -151,3 +154,12 @@ data class AttendanceWarning(
 
 @Serializable
 data class JustifyLateRequest(val justificacion: String)
+
+@Serializable
+data class OverlapPerson(val name: String = "", val approved: Boolean = false)
+
+@Serializable
+data class OverlapResponse(val count: Int = 0, val people: List<OverlapPerson> = emptyList())
+
+@Serializable
+data class OkResponse(val ok: Boolean = true)

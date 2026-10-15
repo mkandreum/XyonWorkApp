@@ -137,6 +137,15 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
     fun push(r: String) = nav.navigate(r) { launchSingleTop = true }
     fun tab(r: String) = nav.navigate(r) { popUpTo("home") { saveState = true }; launchSingleTop = true; restoreState = true }
 
+    // Launcher shortcuts land here once the session is open
+    val deepLink by DeepLinks.pending.collectAsState()
+    LaunchedEffect(deepLink) {
+        val r = deepLink ?: return@LaunchedEffect
+        DeepLinks.pending.value = null
+        // Only whitelisted tabs: any app can send an intent to the exported launcher activity
+        if (TABS.any { it.route == r }) tab(r)
+    }
+
     AuroraBackground {
         SharedTransitionLayout {
             CompositionLocalProvider(LocalSharedScope provides this) {
@@ -164,7 +173,11 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
                             else say("Este dispositivo no tiene biometría o PIN configurado")
                         }
                     } }
-                    composable("notifications") { Scoped(this) { NotificationsScreen({ nav.popBackStack() }) } }
+                    composable("notifications") { Scoped(this) {
+                        NotificationsScreen({ nav.popBackStack() }, user) { r ->
+                            if (TABS.any { it.route == r }) tab(r) else push(r)
+                        }
+                    } }
                     composable("payroll") { Scoped(this) {
                         BiometricGate("Tus nóminas", "Confirma que eres tú para verlas", { tab("home") }) {
                             PayrollScreen(null, snack = say)

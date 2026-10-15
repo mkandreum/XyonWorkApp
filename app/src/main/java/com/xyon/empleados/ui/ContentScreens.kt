@@ -6,17 +6,21 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 
 import android.content.Intent
 import androidx.compose.animation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -28,6 +32,7 @@ import coil.compose.AsyncImage
 import com.xyon.empleados.BuildConfig
 import com.xyon.empleados.data.*
 import com.xyon.empleados.ui.theme.*
+import com.xyon.empleados.ui.admin.RoleHero
 import java.io.File
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -131,6 +136,25 @@ fun PayrollScreen(onBack: (() -> Unit)?, vm: PayrollViewModel = hiltViewModel(),
         LoadScreen(st, { vm.items.refresh() }) { list ->
             ListScreenColumn {
                 if (list.isEmpty()) item { EmptyState(Icons.Filled.Receipt, "Sin nóminas disponibles") }
+                if (list.isNotEmpty()) item {
+                    val months = listOf("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+                    fun idx(p: Payroll) = p.year * 12 + (months.indexOf(p.month.lowercase()).takeIf { it >= 0 } ?: (p.month.toIntOrNull()?.minus(1) ?: 0))
+                    val sorted = list.sortedByDescending(::idx)
+                    val year = sorted.first().year
+                    val total = list.filter { it.year == year }.sumOf { it.amount }
+                    val last = sorted.first()
+                    val prev = sorted.getOrNull(1)
+                    val diff = if (prev != null && prev.amount > 0) (last.amount - prev.amount) / prev.amount * 100 else null
+                    Row(Modifier.fillMaxWidth().staggered(0), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        StatPill("Total $year", money(total), Icons.Filled.Savings, Lime, Modifier.weight(1.3f))
+                        StatPill(
+                            if (diff == null) "Última" else "vs. anterior",
+                            if (diff == null) money(last.amount) else "%+.1f%%".format(diff),
+                            if (diff != null && diff < 0) Icons.Filled.TrendingDown else Icons.Filled.TrendingUp,
+                            if (diff != null && diff < 0) Coral else Lilac, Modifier.weight(1f),
+                        )
+                    }
+                }
                 staggeredItems(list.sortedWith(compareByDescending<Payroll> { it.year }.thenByDescending { it.month }), { it.id }) { _, p ->
                     GlassCard(Modifier.fillMaxWidth(), onClick = { vm.open(p) }) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -157,48 +181,74 @@ fun PayrollScreen(onBack: (() -> Unit)?, vm: PayrollViewModel = hiltViewModel(),
 @Composable
 fun ProfileScreen(
     user: User, vm: SessionViewModel, onNotifications: () -> Unit, onPayroll: () -> Unit, onFichajes: () -> Unit,
-    onTeam: () -> Unit, onAdmin: () -> Unit, onEnableBiometric: (Boolean) -> Unit,
+    onTeam: () -> Unit, onAdmin: () -> Unit, roleVm: RoleViewModel = hiltViewModel(),
+    onEnableBiometric: (Boolean) -> Unit,
 ) {
     SecureScreen()
+    val x = Xyon.colors
     val bio by vm.biometricEnabled.collectAsState(false)
+    val pending by roleVm.pending.collectAsState()
+    LaunchedEffect(user.id) { roleVm.load(user) }
     var edit by remember { mutableStateOf(false) }
     var pwd by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(16.dp).padding(bottom = 110.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        GlassCard(Modifier.fillMaxWidth().staggered(0), accent = Lime) {
+        XyonCard(Modifier.fillMaxWidth().staggered(0), accent = Lime) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Avatar(user.name, 64)
+                Avatar(user.name, 68)
                 Spacer(Modifier.width(14.dp))
                 Column {
-                    Text(user.name, style = MaterialTheme.typography.titleLarge)
-                    Text(user.position.ifBlank { user.role }, color = Slate400)
-                    Text(user.email, color = Slate500, style = MaterialTheme.typography.bodyMedium)
+                    Text(user.name, style = MaterialTheme.typography.headlineMedium)
+                    Text(user.position.ifBlank { "Sin cargo" }, color = x.inkSoft)
+                    Text(user.email, color = x.inkSoft, style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatusChip(user.department.ifBlank { "Sin depto." }, Tone.Info)
-                StatusChip(when (user.role) { "ADMIN" -> "Administrador"; "MANAGER" -> "Responsable"; else -> "Empleado" }, Tone.Neutral)
+                RoleChip(user.role)
+                StatusChip(user.department.ifBlank { "Sin departamento" }, Tone.Neutral)
             }
         }
-        Box(Modifier.staggered(1)) { GlassCard(Modifier.fillMaxWidth()) {
+        // Manager / admin: their tools front and centre, with what is waiting for them
+        if (user.isManager) {
+            RoleHero(
+                title = if (user.isAdmin) "Administración" else "Tu equipo · ${user.department}",
+                pending = pending,
+                onReview = { if (user.isAdmin) onAdmin() else onTeam() },
+                modifier = Modifier.staggered(1),
+                actionLabel = if (user.isAdmin) "Abrir administración" else "Gestionar mi equipo",
+            )
+        }
+        Box(Modifier.staggered(2)) { XyonCard(Modifier.fillMaxWidth()) {
+            Text("Mis datos", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp))
             InfoRow(Icons.Filled.Phone, "Teléfono", user.phone)
             InfoRow(Icons.Filled.Home, "Dirección", user.address)
             InfoRow(Icons.Filled.ContactEmergency, "Contacto de emergencia", user.emergencyContact)
             TextButton({ edit = true }) { Icon(Icons.Filled.Edit, null); Spacer(Modifier.width(6.dp)); Text("Editar datos") }
         } }
-        Box(Modifier.staggered(2)) { GlassCard(Modifier.fillMaxWidth()) {
+        Box(Modifier.staggered(3)) { XyonCard(Modifier.fillMaxWidth()) {
+            Text("Seguridad y avisos", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp))
             NavRow(Icons.Filled.Notifications, "Notificaciones", onNotifications)
-            if (user.isManager) NavRow(Icons.Filled.Groups, "Gestión de equipo", onTeam)
-            if (user.isAdmin) NavRow(Icons.Filled.AdminPanelSettings, "Administración", onAdmin)
-        } }
-        Box(Modifier.staggered(3)) { GlassCard(Modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Fingerprint, null, tint = Primary400); Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) { Text("Desbloqueo biométrico"); Text("Pide huella/PIN al abrir la app", color = Slate400, style = MaterialTheme.typography.bodyMedium) }
-                Switch(bio, { onEnableBiometric(it) })
+            val ctx = LocalContext.current
+            var reminders by remember { mutableStateOf(Reminders.enabled(ctx)) }
+            Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Alarm, null, tint = x.blue); Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Recordatorios de fichaje")
+                    Text("Aviso si se te pasa la entrada o la salida", color = x.inkSoft, style = MaterialTheme.typography.bodyMedium)
+                }
+                Switch(reminders, { on -> reminders = on; Reminders.setEnabled(ctx, on) },
+                    colors = SwitchDefaults.colors(checkedTrackColor = x.blue, checkedThumbColor = Lime))
+            }
+            Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Fingerprint, null, tint = x.blue); Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Bloqueo con huella")
+                    Text("Al volver a la app y al abrir nóminas", color = x.inkSoft, style = MaterialTheme.typography.bodyMedium)
+                }
+                Switch(bio, { onEnableBiometric(it) }, colors = SwitchDefaults.colors(checkedTrackColor = x.blue, checkedThumbColor = Lime))
             }
             NavRow(Icons.Filled.Password, "Cambiar contraseña", { pwd = true })
-            NavRow(Icons.Filled.Logout, "Cerrar sesión", { vm.signOut() }, Danger)
+            NavRow(Icons.AutoMirrored.Filled.Logout, "Cerrar sesión", { vm.signOut() }, Coral)
         } }
     }
     if (edit) {
@@ -224,18 +274,31 @@ fun ProfileScreen(
     }
 }
 
+/** Flat role pill: admin = coral, manager = sun, employee = lime. */
+@Composable
+private fun RoleChip(role: String) {
+    val (label, color) = when (role) {
+        "ADMIN" -> "Administrador" to Coral
+        "MANAGER" -> "Responsable" to Sun
+        else -> "Empleado" to Lime
+    }
+    Text(label, color = InkBlack, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.labelSmall,
+        modifier = Modifier.clip(CircleShape).background(color).padding(horizontal = 12.dp, vertical = 5.dp))
+}
+
 @Composable
 private fun InfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String?) {
     Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = Slate400, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(12.dp))
-        Column { Text(label, color = Slate500, style = MaterialTheme.typography.labelSmall); Text(value?.ifBlank { null } ?: "—") }
+        Icon(icon, null, tint = Xyon.colors.inkSoft, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(12.dp))
+        Column { Text(label, color = Xyon.colors.inkSoft, style = MaterialTheme.typography.labelSmall); Text(value?.ifBlank { null } ?: "—") }
     }
 }
 
 @Composable
-fun NavRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, tint: androidx.compose.ui.graphics.Color = Primary400) {
+fun NavRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, tint: androidx.compose.ui.graphics.Color = Color.Unspecified) {
+    val x = Xyon.colors
     Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable(onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = tint); Spacer(Modifier.width(14.dp)); Text(label, Modifier.weight(1f))
-        Icon(Icons.Filled.ChevronRight, null, tint = Slate500)
+        Icon(icon, null, tint = if (tint == Color.Unspecified) x.blue else tint); Spacer(Modifier.width(14.dp)); Text(label, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+        Icon(Icons.Filled.ChevronRight, null, tint = x.inkSoft)
     }
 }

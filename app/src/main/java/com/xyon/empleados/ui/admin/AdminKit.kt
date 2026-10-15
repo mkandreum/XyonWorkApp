@@ -150,9 +150,14 @@ fun IconAction(icon: ImageVector, desc: String, danger: Boolean = false, onClick
 
 @Composable
 fun ApproveRejectRow(onApprove: () -> Unit, onReject: () -> Unit) {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(onApprove, colors = ButtonDefaults.buttonColors(containerColor = Success)) { Text("Aprobar") }
-        OutlinedButton(onReject) { Text("Rechazar", color = Danger) }
+        Button({ haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); onApprove() }, colors = ButtonDefaults.buttonColors(containerColor = Lime, contentColor = InkBlack)) {
+            Icon(Icons.Filled.Check, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Aprobar", fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold)
+        }
+        OutlinedButton({ haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove); onReject() }, border = androidx.compose.foundation.BorderStroke(1.5.dp, Xyon.colors.outline)) {
+            Text("Rechazar", color = Xyon.colors.ink, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+        }
     }
 }
 

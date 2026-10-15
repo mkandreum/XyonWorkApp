@@ -53,6 +53,7 @@ fun RequestsScreen(vm: VacationsViewModel = hiltViewModel(), snack: (String) -> 
     val busy by vm.busy.collectAsState()
     var tab by remember { mutableIntStateOf(0) }
     var showForm by remember { mutableStateOf(false) }
+    var cancelFor by remember { mutableStateOf<VacationRequest?>(null) }
     LaunchedEffect(Unit) { vm.msg.collect { snack(it) } }
 
     Box(Modifier.fillMaxSize()) {
@@ -70,17 +71,24 @@ fun RequestsScreen(vm: VacationsViewModel = hiltViewModel(), snack: (String) -> 
                     bal.data?.let { b ->
                         item {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                if (tab == 0) StatPill("Días usados", "%.0f".format(b.vacationDaysUsed), Icons.Filled.BeachAccess, Success, Modifier.weight(1f))
+                                if (tab == 0) StatPill("Días usados", "%.0f".format(b.vacationDaysUsed), Icons.Filled.BeachAccess, Lime, Modifier.weight(1f))
                                 else {
-                                    StatPill("Horas baja", "%.0f".format(b.sickLeaveHoursUsed), Icons.Filled.LocalHospital, Danger, Modifier.weight(1f))
-                                    StatPill("Horas extra", "%.0f".format(b.overtimeHoursUsed), Icons.Filled.MoreTime, Primary400, Modifier.weight(1f))
-                                    StatPill("Permisos", "%.0f".format(b.paidAbsenceHoursUsed), Icons.Filled.EventAvailable, Warning, Modifier.weight(1f))
+                                    StatPill("Horas médicas", "%.0f".format(b.sickLeaveHoursUsed), Icons.Filled.LocalHospital, Coral, Modifier.weight(1f))
+                                    StatPill("Horas extra", "%.0f".format(b.overtimeHoursUsed), Icons.Filled.MoreTime, Lilac, Modifier.weight(1f))
+                                    StatPill("Permisos", "%.0f".format(b.paidAbsenceHoursUsed), Icons.Filled.EventAvailable, Sun, Modifier.weight(1f))
                                 }
                             }
                         }
                     }
                     if (list.isEmpty()) item { EmptyState(Icons.Filled.EventBusy, "Aún no hay solicitudes") }
-                    staggeredItems(list, { it.id }) { _, v -> VacationRow(v) }
+                    staggeredItems(list, { it.id }) { _, v ->
+                        VacationRow(v, trailing = if (v.status.startsWith("PENDING")) ({
+                            TextButton({ cancelFor = v }, Modifier.padding(top = 4.dp)) {
+                                Icon(Icons.Filled.Close, null, tint = Coral, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(4.dp))
+                                Text("Cancelar solicitud", color = Coral, fontWeight = FontWeight.Bold)
+                            }
+                        }) else null)
+                    }
                 }
             }
         }
@@ -91,12 +99,33 @@ fun RequestsScreen(vm: VacationsViewModel = hiltViewModel(), snack: (String) -> 
         )
     }
 
-    if (showForm) NewRequestSheet(tab == 1, busy, { showForm = false }) { req, file -> vm.create(req, file) { showForm = false } }
+    if (showForm) NewRequestSheet(tab == 1, busy, { showForm = false }, { s, e -> vm.overlap(s, e) }) { req, file -> vm.create(req, file) { showForm = false } }
+    cancelFor?.let { v ->
+        AlertDialog(
+            onDismissRequest = { cancelFor = null }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("Cancelar solicitud") },
+            text = { Text("¿Cancelar ${typeLabel(v.type).lowercase()} del ${fmtDate(v.startDate)} al ${fmtDate(v.endDate)}?") },
+            confirmButton = { TextButton({ vm.cancel(v.id); cancelFor = null }) { Text("Cancelar solicitud", color = Coral) } },
+            dismissButton = { TextButton({ cancelFor = null }) { Text("Volver") } },
+        )
+    }
+}
+
+/** Calendar and working (Mon–Fri) days between two dates, both inclusive — same rule as the server. */
+private fun countDays(s: LocalDate, e: LocalDate): Pair<Int, Int> {
+    var natural = 0; var business = 0
+    var d = s
+    while (!d.isAfter(e)) { natural++; if (d.dayOfWeek.value <= 5) business++; d = d.plusDays(1) }
+    return natural to business
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NewRequestSheet(absence: Boolean, busy: Boolean, onDismiss: () -> Unit, onSubmit: (CreateVacationRequest, Pair<ByteArray, String>?) -> Unit) {
+private fun NewRequestSheet(
+    absence: Boolean, busy: Boolean, onDismiss: () -> Unit,
+    checkOverlap: suspend (String, String) -> OverlapResponse?,
+    onSubmit: (CreateVacationRequest, Pair<ByteArray, String>?) -> Unit,
+) {
     val ctx = LocalContext.current
     var type by remember { mutableStateOf(if (absence) "PERSONAL" else "VACATION") }
     var subtype by remember { mutableStateOf("") }
@@ -106,7 +135,20 @@ private fun NewRequestSheet(absence: Boolean, busy: Boolean, onDismiss: () -> Un
     val picked = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let { file = readFile(ctx, it) } }
     val start = picker.selectedStartDateMillis; val end = picker.selectedEndDateMillis ?: start
     fun d(ms: Long) = Instant.ofEpochMilli(ms).atZone(ZoneOffset.UTC).toLocalDate()
-    val days = if (start != null && end != null) (java.time.temporal.ChronoUnit.DAYS.between(d(start), d(end)) + 1).toInt() else 0
+    val (natural, business) = if (start != null && end != null) countDays(d(start), d(end)) else (0 to 0)
+    val hoursOnly = type == "SICK_LEAVE" && (hours.toIntOrNull() ?: 0) > 0
+    // Vacations count working days; "Matrimonio" counts calendar days; medical hours are hour-based (0 days)
+    val days = when {
+        hoursOnly -> 0
+        subtype.contains("Matrimonio", ignoreCase = true) -> natural
+        else -> business
+    }
+    var overlap by remember { mutableStateOf<OverlapResponse?>(null) }
+    LaunchedEffect(start, end) {
+        overlap = null
+        if (start != null && end != null) { kotlinx.coroutines.delay(300); overlap = checkOverlap(d(start).toString(), d(end).toString()) }
+    }
+    val valid = start != null && end != null && (if (hoursOnly) natural == 1 else days in 1..365)
 
     ModalBottomSheet(onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Column(Modifier.padding(horizontal = 20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -124,12 +166,35 @@ private fun NewRequestSheet(absence: Boolean, busy: Boolean, onDismiss: () -> Un
             }
             DateRangePicker(picker, Modifier.height(430.dp), title = null, headline = null, showModeToggle = false,
                 colors = DatePickerDefaults.colors(containerColor = Color.Transparent))
-            GradientButton(if (days > 0) "Enviar ($days día${if (days > 1) "s" else ""})" else "Selecciona fechas", {
-                onSubmit(CreateVacationRequest(d(start!!).toString(), d(end!!).toString(), days, hours.toIntOrNull(), type, subtype.ifBlank { null }), file)
-            }, Modifier.fillMaxWidth(), enabled = days in 1..365, loading = busy)
+            // Live summary: counted days and colleagues already off
+            if (start != null) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                when {
+                    hoursOnly -> SummaryChip("${hours}h el ${fmtDate(d(start).toString())}", Lime)
+                    days == 0 -> SummaryChip("Sin días laborables en ese rango", Coral)
+                    else -> SummaryChip("$days ${if (days == 1) "día" else "días"} ${if (days == natural && natural != business) "naturales" else "laborables"}", Lime)
+                }
+                overlap?.let { o ->
+                    if (o.count == 0) SummaryChip("Nadie de tu equipo está fuera", Xyon.colors.cardAlt)
+                    else SummaryChip(if (o.count == 1) "${o.people.first().name.substringBefore(" ")} también estará fuera" else "${o.count} compañeros también fuera", Sun)
+                }
+            }
+            if (hoursOnly && start != null && natural > 1) Text("Las horas médicas son de un solo día: elige una sola fecha.", color = Coral)
+            XyonButton(when {
+                !valid -> "Selecciona fechas"
+                hoursOnly -> "Enviar ($hours h)"
+                else -> "Enviar ($days día${if (days > 1) "s" else ""})"
+            }, {
+                onSubmit(CreateVacationRequest(d(start!!).toString(), d(end ?: start).toString(), days, hours.toIntOrNull(), type, subtype.ifBlank { null }), file)
+            }, Modifier.fillMaxWidth(), enabled = valid, loading = busy)
             Spacer(Modifier.height(24.dp))
         }
     }
+}
+
+@Composable
+private fun SummaryChip(text: String, color: Color) {
+    Text(text, color = InkBlack, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier.clip(CircleShape).background(color).padding(horizontal = 12.dp, vertical = 7.dp))
 }
 
 // ───────── Calendar (personal / team) — also home of "Mis fichajes" ─────────

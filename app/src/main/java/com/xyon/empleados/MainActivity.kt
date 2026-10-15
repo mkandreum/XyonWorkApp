@@ -6,7 +6,12 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import android.net.Uri
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import com.xyon.empleados.ui.AppLock
+import com.xyon.empleados.ui.DeepLinks
 import com.xyon.empleados.ui.AppRoot
 import com.xyon.empleados.ui.theme.XyonTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -20,7 +25,31 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        DeepLinks.from(intent)
+        publishShortcuts()
         setContent { XyonTheme { AppRoot() } }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        DeepLinks.from(intent)
+    }
+
+    /** Long-press launcher shortcuts. Dynamic so they work with the ".debug" application id too. */
+    private fun publishShortcuts() {
+        fun shortcut(id: String, label: String, icon: Int, route: String) =
+            ShortcutInfoCompat.Builder(this, id)
+                .setShortLabel(label)
+                .setIcon(IconCompat.createWithResource(this, icon))
+                .setIntent(Intent(this, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("xyon://open/$route")))
+                .build()
+        runCatching {
+            ShortcutManagerCompat.setDynamicShortcuts(this, listOf(
+                shortcut("fichar", "Fichar", R.drawable.ic_shortcut_fichar, "home"),
+                shortcut("nominas", "Mis nóminas", R.drawable.ic_shortcut_payroll, "payroll"),
+                shortcut("vacaciones", "Pedir vacaciones", R.drawable.ic_shortcut_vacation, "requests"),
+            ))
+        }
     }
 
     // Everything the app opens itself (file pickers via the Activity Result API, share sheets, PDF viewers)

@@ -211,10 +211,20 @@ class VacationsViewModel @Inject constructor(private val api: Api, lf: LoaderFac
                 req = r.copy(justificationUrl = up.url ?: up.fileUrl ?: up.path)
             }
             api.createVacation(req)
-        }.onSuccess { _msg.tryEmit("Solicitud enviada"); items.refresh(); ok() }
+        }.onSuccess { _msg.tryEmit("Solicitud enviada"); items.refresh(); balance.refresh(); ok() }
             .onFailure { _msg.tryEmit(it.userMessage()) }
         _busy.value = false
     }
+
+    /** Cancel one of my own requests while it is still pending. */
+    fun cancel(id: String) = viewModelScope.launch {
+        safeCall { api.cancelVacation(id) }
+            .onSuccess { _msg.tryEmit("Solicitud cancelada"); items.refresh(); balance.refresh() }
+            .onFailure { _msg.tryEmit(it.userMessage()) }
+    }
+
+    /** Colleagues of my department already off in that range (null if it could not be checked). */
+    suspend fun overlap(start: String, end: String): OverlapResponse? = safeCall { api.vacationOverlap(start, end) }.getOrNull()
 }
 
 @HiltViewModel
@@ -290,48 +300,6 @@ class NotificationsViewModel @Inject constructor(private val api: Api, lf: Loade
     fun read(id: String) = viewModelScope.launch { safeCall { api.readNotification(id) }; items.refresh() }
     fun readAll() = viewModelScope.launch { safeCall { api.readAllNotifications() }; items.refresh() }
     fun delete(id: String) = viewModelScope.launch { safeCall { api.deleteNotification(id) }; items.refresh() }
-}
-
-/** Manager: team requests, adjustments, team members. */
-@HiltViewModel
-class ManagerViewModel @Inject constructor(private val api: Api, lf: LoaderFactory) : ViewModel() {
-    val vacations = lf.create<List<VacationRequest>>(viewModelScope, "team_vacations") { api.teamVacations() }
-    val adjustments = lf.create<List<FichajeAdjustment>>(viewModelScope, "pending_adjustments") { api.pendingAdjustments() }
-    val members = lf.create<List<User>>(viewModelScope, "team_members") { api.teamMembers() }
-    private val _msg = MutableSharedFlow<String>(extraBufferCapacity = 4)
-    val msg = _msg.asSharedFlow()
-
-    private fun act(ok: String, block: suspend () -> Any, after: () -> Unit) = viewModelScope.launch {
-        safeCall { block() }.onSuccess { _msg.tryEmit(ok); after() }.onFailure { _msg.tryEmit(it.userMessage()) }
-    }
-    fun approve(id: String) = act("Solicitud aprobada", { api.managerApprove(id) }) { vacations.refresh() }
-    fun reject(id: String) = act("Solicitud rechazada", { api.managerReject(id) }) { vacations.refresh() }
-    fun approveAdj(id: String) = act("Ajuste aprobado", { api.approveAdjustment(id) }) { adjustments.refresh() }
-    fun rejectAdj(id: String, reason: String) = act("Ajuste rechazado", { api.rejectAdjustment(id, RejectRequest(reason)) }) { adjustments.refresh() }
-}
-
-@HiltViewModel
-class AdminViewModel @Inject constructor(private val api: Api, lf: LoaderFactory) : ViewModel() {
-    val stats = lf.create<AdminStats>(viewModelScope, "admin_stats") { api.adminStats() }
-    val users = lf.create<List<User>>(viewModelScope, "admin_users") { api.adminUsers() }
-    val vacations = lf.create<List<VacationRequest>>(viewModelScope, "admin_vacations") { api.adminVacations() }
-    val invites = lf.create<List<InvitationCode>>(viewModelScope, "admin_invites") { api.invites() }
-    val news = lf.create<List<NewsItem>>(viewModelScope, "news") { api.news() }
-    val payrolls = lf.create<List<Payroll>>(viewModelScope, "admin_payrolls") { api.adminPayrolls() }
-    private val _msg = MutableSharedFlow<String>(extraBufferCapacity = 4)
-    val msg = _msg.asSharedFlow()
-
-    private fun act(ok: String, block: suspend () -> Any, after: () -> Unit) = viewModelScope.launch {
-        safeCall { block() }.onSuccess { _msg.tryEmit(ok); after() }.onFailure { _msg.tryEmit(it.userMessage()) }
-    }
-    fun refreshAll() { stats.refresh(); users.refresh(); vacations.refresh(); invites.refresh(); news.refresh(); payrolls.refresh() }
-    fun setVacation(id: String, status: String) = act("Solicitud actualizada", { api.adminVacationStatus(id, StatusRequest(status)) }) { vacations.refresh(); stats.refresh() }
-    fun deleteUser(id: String) = act("Usuario eliminado", { api.adminDeleteUser(id) }) { users.refresh(); stats.refresh() }
-    fun newInvite() = act("Código generado", { api.createInvite() }) { invites.refresh() }
-    fun deleteInvite(id: String) = act("Código revocado", { api.deleteInvite(id) }) { invites.refresh() }
-    fun createNews(r: CreateNewsRequest) = act("Noticia publicada", { api.createNews(r) }) { news.refresh() }
-    fun deleteNews(id: String) = act("Noticia eliminada", { api.deleteNews(id) }) { news.refresh() }
-    fun deletePayroll(id: String) = act("Nómina eliminada", { api.adminDeletePayroll(id) }) { payrolls.refresh() }
 }
 
 @javax.inject.Singleton

@@ -67,9 +67,7 @@ private fun AuthShell(
                                 contentAlignment = Alignment.Center,
                             ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", tint = InkBlack) }
                         }
-                        Box(Modifier.size(44.dp).clip(CircleShape).background(Lime), contentAlignment = Alignment.Center) {
-                            Text("X", color = InkBlack, fontWeight = FontWeight.Black, fontSize = 20.sp)
-                        }
+                        LogoTile(44.dp)
                         Spacer(Modifier.width(10.dp))
                         Text("XyonEmpleados", color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp, letterSpacing = (-.6).sp)
                     }
@@ -222,5 +220,14 @@ fun LockScreen(vm: SessionViewModel) {
             XyonButton("Desbloquear", { ask() }, Modifier.fillMaxWidth(), style = XyonButtonStyle.Lime)
             TextButton({ vm.signOut() }) { Text(if (failed) "Cerrar sesión" else "Usar otra cuenta", color = Color.White) }
         }
+    }
+}
+
+/** The Xyon app icon (navy tile + mark), for brand rows inside the app. */
+@Composable
+fun LogoTile(size: androidx.compose.ui.unit.Dp) {
+    Box(Modifier.size(size).clip(RoundedCornerShape(size * 0.28f))) {
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.xyon.empleados.R.drawable.ic_launcher_bg), null, Modifier.matchParentSize())
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.xyon.empleados.R.drawable.ic_launcher_fg), "Xyon", Modifier.matchParentSize().scale(1.45f))
     }
 }

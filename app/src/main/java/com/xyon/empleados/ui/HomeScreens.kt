@@ -27,13 +27,16 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.xyon.empleados.data.*
 import com.xyon.empleados.ui.theme.*
+import com.xyon.empleados.ui.admin.RoleHero
 
 @Composable
 fun HomeScreen(
     user: User, onNotifications: () -> Unit, onFichajes: () -> Unit, onPayroll: () -> Unit,
     onNews: () -> Unit, onTeam: () -> Unit, onAdmin: () -> Unit, notifVm: NotificationsViewModel = hiltViewModel(),
-    vm: DashboardViewModel = hiltViewModel(), snack: (String) -> Unit,
+    vm: DashboardViewModel = hiltViewModel(), snack: (String) -> Unit, roleVm: RoleViewModel = hiltViewModel(),
 ) {
+    val rolePending by roleVm.pending.collectAsState()
+    LaunchedEffect(user.id) { roleVm.load(user) }
     val ctx = LocalContext.current
     val status by vm.status.state.collectAsState()
     val vacations by vm.vacations.state.collectAsState()
@@ -53,6 +56,11 @@ fun HomeScreen(
     }
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         pendingToggle?.let { e -> go(e); pendingToggle = null }
+    }
+
+    // Keep local clock-in/out reminders in sync with the latest status
+    LaunchedEffect(status.data) {
+        status.data?.let { s -> Reminders.sync(ctx, s.hasActiveEntry, s.turno?.expectedEntry, s.turno?.expectedExit) }
     }
 
     val unread = notifs.data?.notifications?.count { !it.read } ?: 0
@@ -89,6 +97,22 @@ fun HomeScreen(
                     }
                 } }
             }
+            status.data?.missingExit?.let { m ->
+                item {
+                    val shape = RoundedCornerShape(28.dp)
+                    Row(
+                        Modifier.fillMaxWidth().clip(shape).background(Coral).border(1.5.dp, Xyon.colors.outline, shape).padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Filled.AlarmOff, null, tint = InkBlack)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Falta la salida del ${fmtDate(m.timestamp)}", color = InkBlack, fontWeight = FontWeight.Black)
+                            Text("Entraste a las ${fmtTimeOf(m.timestamp)}. Pide a tu responsable que registre la salida.", color = InkBlack.copy(alpha = .8f), style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
             val pendingWarnings = warnings.data.orEmpty().filter { w -> !w.justificado }
             if (pendingWarnings.isNotEmpty()) {
                 item { AttendanceAlert(pendingWarnings, Modifier.staggered(1)) { w -> justifyFor = w } }
@@ -107,8 +131,17 @@ fun HomeScreen(
                 Row(Modifier.fillMaxWidth().staggered(2), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     QuickTile("Mis fichajes", Icons.Filled.History, onFichajes, Modifier.weight(1f))
                     QuickTile("Nóminas", Icons.Filled.Receipt, onPayroll, Modifier.weight(1f))
-                    if (user.isManager) QuickTile("Equipo", Icons.Filled.Groups, onTeam, Modifier.weight(1f))
-                    if (user.isAdmin) QuickTile("Admin", Icons.Filled.AdminPanelSettings, onAdmin, Modifier.weight(1f))
+                }
+            }
+            if (user.isManager) {
+                item {
+                    RoleHero(
+                        title = if (user.isAdmin) "Administración" else "Tu equipo · ${user.department}",
+                        pending = rolePending,
+                        onReview = { if (user.isAdmin) onAdmin() else onTeam() },
+                        modifier = Modifier.staggered(3),
+                        actionLabel = "Revisar ahora",
+                    )
                 }
             }
             val latest = news.data.orEmpty().take(5)
@@ -246,7 +279,7 @@ fun AdjustFichajeDialog(f: Fichaje, onDismiss: () -> Unit, onSend: (CreateAdjust
 // ───────── Notifications ─────────
 
 @Composable
-fun NotificationsScreen(onBack: () -> Unit, vm: NotificationsViewModel = hiltViewModel()) {
+fun NotificationsScreen(onBack: () -> Unit, user: User? = null, vm: NotificationsViewModel = hiltViewModel(), onOpen: (String) -> Unit = {}) {
     val st by vm.items.state.collectAsState()
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("Notificaciones", null, onBack) {
@@ -256,19 +289,40 @@ fun NotificationsScreen(onBack: () -> Unit, vm: NotificationsViewModel = hiltVie
             ListScreenColumn {
                 if (r.notifications.isEmpty()) item { EmptyState(Icons.Filled.NotificationsNone, "Estás al día") }
                 staggeredItems(r.notifications, { it.id }) { _, n ->
-                    GlassCard(Modifier.fillMaxWidth(), onClick = { if (!n.read) vm.read(n.id) }, accent = if (!n.read) Primary400 else null) {
+                    val target = notificationRoute(n.title, n.message, user)
+                    XyonCard(Modifier.fillMaxWidth(), onClick = {
+                        if (!n.read) vm.read(n.id)
+                        target?.let(onOpen)
+                    }, accent = if (!n.read) Lime else null) {
                         Row(verticalAlignment = Alignment.Top) {
-                            if (!n.read) Box(Modifier.padding(top = 6.dp, end = 10.dp).size(8.dp).clip(CircleShape).background(Primary400))
+                            if (!n.read) Box(Modifier.padding(top = 6.dp, end = 10.dp).size(10.dp).clip(CircleShape).background(Coral))
                             Column(Modifier.weight(1f)) {
                                 Text(n.title, style = MaterialTheme.typography.titleMedium)
-                                Text(n.message, color = Slate400)
-                                Text(fmtDate(n.date ?: n.createdAt), color = Slate500, style = MaterialTheme.typography.labelSmall)
+                                Text(n.message, color = Xyon.colors.inkSoft)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(fmtDate(n.date ?: n.createdAt), color = Xyon.colors.inkSoft, style = MaterialTheme.typography.labelSmall)
+                                    if (target != null) { Spacer(Modifier.width(8.dp)); Text("Abrir →", color = Xyon.colors.blue, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall) }
+                                }
                             }
-                            IconButton({ vm.delete(n.id) }) { Icon(Icons.Filled.Close, "Borrar", tint = Slate500) }
+                            IconButton({ vm.delete(n.id) }) { Icon(Icons.Filled.Close, "Borrar", tint = Xyon.colors.inkSoft) }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+/** Where a notification leads (same mapping as the web): requests, clock-ins, payslips or news. */
+fun notificationRoute(title: String, message: String, user: User?): String? {
+    val t = "$title $message".lowercase()
+    val staff = user?.isManager == true
+    return when {
+        "aviso" in t || "tarde" in t -> if (staff) "adm/late" else "home"
+        "ajuste" in t || "fichaje" in t || "justific" in t -> if (staff) "adm/adjust" else "calendar"
+        "vacacion" in t || "ausenc" in t || "permiso" in t || "solicitud" in t -> if (staff) "adm/vac" else "requests"
+        "nómina" in t || "nomina" in t -> "payroll"
+        "noticia" in t || "comunicado" in t || "evento" in t -> "news"
+        else -> null
     }
 }

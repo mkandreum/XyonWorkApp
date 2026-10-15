@@ -35,3 +35,12 @@ fun promptBiometric(a: FragmentActivity, title: String, onOk: () -> Unit, onFail
             .setAllowedAuthenticators(AUTH).build()
     )
 }
+
+/** Route requested from outside the UI (launcher shortcuts): "home", "payroll", "requests"… */
+object DeepLinks {
+    val pending = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    fun from(intent: android.content.Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme == "xyon" && uri.host == "open") uri.lastPathSegment?.let { pending.value = it }
+    }
+}
