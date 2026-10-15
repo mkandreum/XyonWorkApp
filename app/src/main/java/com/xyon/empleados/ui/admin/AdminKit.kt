@@ -48,6 +48,9 @@ abstract class AdminVm : ViewModel() {
     }
 }
 
+/** True when the current admin screen is a bottom-bar tab: no back arrow there. */
+val LocalTabRoot = staticCompositionLocalOf { false }
+
 @Composable
 fun AdminPage(
     title: String, subtitle: String?, onBack: () -> Unit, vm: AdminVm, snack: (String) -> Unit,
@@ -56,7 +59,7 @@ fun AdminPage(
     LaunchedEffect(vm) { vm.msg.collect { snack(it) } }
     val busy by vm.busy.collectAsState()
     Column(Modifier.fillMaxSize()) {
-        ScreenHeader(title, subtitle, onBack, actions)
+        ScreenHeader(title, subtitle, if (LocalTabRoot.current) null else onBack, actions)
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
         content()
     }

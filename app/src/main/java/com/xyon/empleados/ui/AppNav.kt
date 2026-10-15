@@ -41,7 +41,7 @@ import com.xyon.empleados.ui.theme.*
 import kotlinx.coroutines.launch
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
-private val TABS = listOf(
+private val EMPLOYEE_TABS = listOf(
     Tab("home", "Inicio", Icons.Filled.Home),
     Tab("calendar", "Calendario", Icons.Filled.CalendarMonth),
     Tab("requests", "Solicitudes", Icons.Filled.BeachAccess),
@@ -49,6 +49,15 @@ private val TABS = listOf(
     Tab("news", "Noticias", Icons.Filled.Newspaper),
     Tab("profile", "Perfil", Icons.Filled.Person),
 )
+/** Admins manage, they don't clock in or get payslips here: their bar is the management menu. */
+private val ADMIN_TABS = listOf(
+    Tab("admin", "Panel", Icons.Filled.Dashboard),
+    Tab("adm/all", "Solicitudes", Icons.Filled.Inbox),
+    Tab("adm/fichajes", "Fichajes", Icons.Filled.AccessTime),
+    Tab("adm/users", "Usuarios", Icons.Filled.People),
+    Tab("profile", "Perfil", Icons.Filled.Person),
+)
+private fun tabsFor(user: User) = if (user.isAdmin) ADMIN_TABS else EMPLOYEE_TABS
 
 @Composable
 fun AppRoot(vm: SessionViewModel = hiltViewModel()) {
@@ -132,10 +141,12 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
     val say: (String) -> Unit = { m -> scope.launch { snack.showSnackbar(m) } }
     val route by nav.currentBackStackEntryAsState()
     val current = route?.destination?.route
-    val showBar = TABS.any { it.route == current }
+    val tabs = remember(user.role) { tabsFor(user) }
+    val start = tabs.first().route
+    val showBar = tabs.any { it.route == current }
 
     fun push(r: String) = nav.navigate(r) { launchSingleTop = true }
-    fun tab(r: String) = nav.navigate(r) { popUpTo("home") { saveState = true }; launchSingleTop = true; restoreState = true }
+    fun tab(r: String) = nav.navigate(r) { popUpTo(start) { saveState = true }; launchSingleTop = true; restoreState = true }
 
     // Launcher shortcuts land here once the session is open
     val deepLink by DeepLinks.pending.collectAsState()
@@ -143,14 +154,14 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
         val r = deepLink ?: return@LaunchedEffect
         DeepLinks.pending.value = null
         // Only whitelisted tabs: any app can send an intent to the exported launcher activity
-        if (TABS.any { it.route == r }) tab(r)
+        if (tabs.any { it.route == r }) tab(r)
     }
 
     AuroraBackground {
         SharedTransitionLayout {
             CompositionLocalProvider(LocalSharedScope provides this) {
                 NavHost(
-                    nav, "home",
+                    nav, start,
                     enterTransition = { slideInHorizontally(spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow)) { it / 4 } + fadeIn(tween(250)) },
                     exitTransition = { fadeOut(tween(150)) },
                     popEnterTransition = { fadeIn(tween(250)) },
@@ -167,7 +178,7 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
                         NewsDetailScreen(newsState.data?.firstOrNull { it.id == id }) { nav.popBackStack() }
                     } }
                     composable("profile") { Scoped(this) {
-                        ProfileScreen(user, session, { push("notifications") }, { tab("payroll") }, { tab("calendar") }, { push("team") }, { push("admin") }) { on ->
+                        ProfileScreen(user, session, { push("notifications") }, { tab("payroll") }, { tab("calendar") }, { push("team") }, { if (tabs.any { it.route == "admin" }) tab("admin") else push("admin") }) { on ->
                             if (!on) session.setBiometric(false)
                             else if (canAuthenticate(act)) promptBiometric(act, "Activar desbloqueo", { session.setBiometric(true) }, { say(it) })
                             else say("Este dispositivo no tiene biometría o PIN configurado")
@@ -175,7 +186,7 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
                     } }
                     composable("notifications") { Scoped(this) {
                         NotificationsScreen({ nav.popBackStack() }, user) { r ->
-                            if (TABS.any { it.route == r }) tab(r) else push(r)
+                            if (tabs.any { it.route == r }) tab(r) else push(r)
                         }
                     } }
                     composable("payroll") { Scoped(this) {
@@ -183,7 +194,7 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
                             PayrollScreen(null, snack = say)
                         }
                     } }
-                    adminRoutes(nav, user, say)
+                    adminRoutes(nav, user, say, tabRoots = tabs.map { it.route }.toSet())
                 }
             }
         }
@@ -191,7 +202,7 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
             showBar, Modifier.align(Alignment.BottomCenter),
             enter = slideInVertically(spring(Spring.DampingRatioMediumBouncy)) { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut(),
-        ) { BottomBar(current ?: "home") { tab(it) } }
+        ) { BottomBar(tabs, current ?: start) { tab(it) } }
     }
 }
 
@@ -202,17 +213,17 @@ private fun Scoped(scope: AnimatedVisibilityScope, content: @Composable () -> Un
 
 /** Floating dark capsule, icon-only, with a lime highlight that springs between tabs. */
 @Composable
-private fun BottomBar(selected: String, onSelect: (String) -> Unit) {
+private fun BottomBar(tabs: List<Tab>, selected: String, onSelect: (String) -> Unit) {
     val haptic = LocalHapticFeedback.current
     val x = Xyon.colors
-    val idx = TABS.indexOfFirst { it.route == selected }.coerceAtLeast(0)
-    val item = if (TABS.size > 5) 52.dp else 58.dp
+    val idx = tabs.indexOfFirst { it.route == selected }.coerceAtLeast(0)
+    val item = if (tabs.size > 5) 52.dp else 58.dp
     Box(Modifier.navigationBarsPadding().padding(bottom = 14.dp)) {
         Box(Modifier.clip(CircleShape).background(x.capsule).border(1.5.dp, if (x.dark) x.outline else Color.Transparent, CircleShape).padding(7.dp)) {
             val ind by animateDpAsState(item * idx, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "ind")
             Box(Modifier.offset(x = ind).size(item).clip(CircleShape).background(Lime))
             Row {
-                TABS.forEachIndexed { i, t ->
+                tabs.forEachIndexed { i, t ->
                     val sel = i == idx
                     val s by animateFloatAsState(if (sel) 1.15f else 1f, spring(Spring.DampingRatioHighBouncy, Spring.StiffnessMedium), label = "s")
                     val tint by animateColorAsState(if (sel) InkBlack else x.onCapsule.copy(alpha = .62f), label = "t")

@@ -180,13 +180,18 @@ private fun ToolTile(t: Tool, badge: Int?, modifier: Modifier, onClick: () -> Un
 }
 
 /** Registers the hub plus every admin/manager sub-screen. Routes: adm/{tool}. */
-fun NavGraphBuilder.adminRoutes(nav: NavHostController, user: User, snack: (String) -> Unit) {
+fun NavGraphBuilder.adminRoutes(nav: NavHostController, user: User, snack: (String) -> Unit, tabRoots: Set<String> = emptySet()) {
     val back: () -> Unit = { nav.popBackStack() }
     val admin = user.role == "ADMIN"
     val open: (String) -> Unit = { nav.navigate("adm/$it") { launchSingleTop = true } }
-    composable("admin") { AdminHubScreen(user, back, open, snack) }
+    // Screens that are bottom-bar tabs hide their back arrow
+    fun tabAware(route: String, content: @Composable () -> Unit) = composable(route) {
+        CompositionLocalProvider(LocalTabRoot provides (route in tabRoots)) { content() }
+    }
+    tabAware("admin") { AdminHubScreen(user, back, open, snack) }
     composable("team") { AdminHubScreen(user, back, open, snack) }
-    composable("adm/users") { AdminUsersScreen(back, snack, onImport = { open("import") }) }
+    tabAware("adm/all") { AdminRequestsScreen("all", !admin, back, snack) }
+    tabAware("adm/users") { AdminUsersScreen(back, snack, onImport = { open("import") }) }
     composable("adm/import") { AdminImportScreen(back, snack) }
     composable("adm/teamweek") { AdminTeamWeekScreen(admin, back, snack) }
     composable("adm/overrides") { AdminOverridesScreen(admin, user.department, back, snack) }
@@ -194,7 +199,7 @@ fun NavGraphBuilder.adminRoutes(nav: NavHostController, user: User, snack: (Stri
     composable("adm/vac") { AdminRequestsScreen("vac", !admin, back, snack) }
     composable("adm/abs") { AdminRequestsScreen("abs", !admin, back, snack) }
     composable("adm/adjust") { AdminAdjustmentsScreen(back, snack) }
-    composable("adm/fichajes") { AdminFichajesScreen(admin, back, snack) }
+    tabAware("adm/fichajes") { AdminFichajesScreen(admin, back, snack) }
     composable("adm/late") { AdminLateScreen(back, snack) }
     composable("adm/shifts") { AdminShiftsScreen(back, snack) }
     composable("adm/assign") { AdminAssignScreen(admin, back, snack) }
