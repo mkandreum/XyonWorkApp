@@ -45,3 +45,39 @@ fun lastLocation(ctx: Context): Location? {
     return lm.getProviders(true).mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }
         .maxByOrNull { it.time }
 }
+
+/** Safe file name for a PDF saved on the device. */
+fun pdfFileName(name: String): String =
+    name.replace(Regex("[^A-Za-z0-9._-]"), "_").let { if (it.endsWith(".pdf", ignoreCase = true)) it else "$it.pdf" }
+
+/** Android 8/9 need the legacy storage permission to write to the public Downloads folder. */
+fun needsLegacyStoragePermission(ctx: Context): Boolean =
+    android.os.Build.VERSION.SDK_INT < 29 &&
+        ContextCompat.checkSelfPermission(ctx, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+
+/**
+ * Saves a PDF into the public Downloads folder. Uses MediaStore on Android 10+ (no permission needed)
+ * and the legacy public directory on Android 8/9. Returns the user-visible location or throws.
+ */
+fun savePdfToDownloads(ctx: Context, bytes: ByteArray, name: String): String {
+    val file = pdfFileName(name)
+    if (android.os.Build.VERSION.SDK_INT >= 29) {
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Downloads.DISPLAY_NAME, file)
+            put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/pdf")
+            put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
+        }
+        val resolver = ctx.contentResolver
+        val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: error("No se pudo crear el archivo")
+        resolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("No se pudo escribir el archivo")
+        values.clear(); values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
+        resolver.update(uri, values, null, null)
+    } else {
+        @Suppress("DEPRECATION")
+        val dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+        dir.mkdirs()
+        java.io.File(dir, file).writeBytes(bytes)
+    }
+    return "Descargas/$file"
+}

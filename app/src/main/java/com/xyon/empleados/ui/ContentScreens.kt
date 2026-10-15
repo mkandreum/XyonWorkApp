@@ -1,5 +1,9 @@
 package com.xyon.empleados.ui
 
+import androidx.activity.result.contract.ActivityResultContracts
+
+import androidx.activity.compose.rememberLauncherForActivityResult
+
 import android.content.Intent
 import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
@@ -92,23 +96,38 @@ fun NewsDetailScreen(item: NewsItem?, onBack: () -> Unit) {
 // ───────── Payroll ─────────
 
 @Composable
-fun PayrollScreen(onBack: () -> Unit, vm: PayrollViewModel = hiltViewModel(), snack: (String) -> Unit) {
+fun PayrollScreen(onBack: (() -> Unit)?, vm: PayrollViewModel = hiltViewModel(), snack: (String) -> Unit) {
     SecureScreen()
     val ctx = LocalContext.current
     val st by vm.items.state.collectAsState()
     val busy by vm.busy.collectAsState()
     LaunchedEffect(Unit) { vm.msg.collect { snack(it) } }
+    var pendingSave by remember { mutableStateOf<Payroll?>(null) }
+    val storagePerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        val p = pendingSave; pendingSave = null
+        if (ok && p != null) vm.open(p, save = true) else if (!ok) snack("Sin permiso de almacenamiento no se puede guardar")
+    }
+    fun save(p: Payroll) {
+        if (needsLegacyStoragePermission(ctx)) { pendingSave = p; storagePerm.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) }
+        else vm.open(p, save = true)
+    }
     LaunchedEffect(Unit) {
-        vm.file.collect { (bytes, name) ->
-            val dir = File(ctx.cacheDir, "docs").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
-            val f = File(dir, name.replace(Regex("[^A-Za-z0-9._-]"), "_").let { if (it.endsWith(".pdf")) it else "$it.pdf" })
-            f.writeBytes(bytes)
-            val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", f)
-            ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Abrir nómina"))
+        vm.file.collect { f ->
+            if (f.save) {
+                runCatching { savePdfToDownloads(ctx, f.bytes, f.name) }
+                    .onSuccess { snack("Guardada en $it") }
+                    .onFailure { snack("No se pudo guardar la nómina") }
+            } else {
+                val dir = File(ctx.cacheDir, "docs").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
+                val file = File(dir, pdfFileName(f.name))
+                file.writeBytes(f.bytes)
+                val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", file)
+                ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Abrir nómina"))
+            }
         }
     }
     Column(Modifier.fillMaxSize()) {
-        ScreenHeader("Nóminas", "Documentos protegidos", onBack)
+        ScreenHeader("Nóminas", "Ábrelas o guárdalas en Descargas", onBack)
         LoadScreen(st, { vm.items.refresh() }) { list ->
             ListScreenColumn {
                 if (list.isEmpty()) item { EmptyState(Icons.Filled.Receipt, "Sin nóminas disponibles") }
@@ -120,7 +139,11 @@ fun PayrollScreen(onBack: () -> Unit, vm: PayrollViewModel = hiltViewModel(), sn
                                 Text(money(p.amount), color = Primary400, fontWeight = FontWeight.Bold)
                             }
                             if (busy == p.id) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                            else { StatusChip(statusLabel(p.status), statusTone(p.status)); Spacer(Modifier.width(8.dp)); Icon(Icons.Filled.PictureAsPdf, null, tint = Slate400) }
+                            else {
+                                StatusChip(statusLabel(p.status), statusTone(p.status))
+                                Spacer(Modifier.width(4.dp))
+                                IconButton({ save(p) }) { Icon(Icons.Filled.Download, "Guardar en Descargas", tint = Xyon.colors.ink) }
+                            }
                         }
                     }
                 }
@@ -165,8 +188,6 @@ fun ProfileScreen(
         } }
         Box(Modifier.staggered(2)) { GlassCard(Modifier.fillMaxWidth()) {
             NavRow(Icons.Filled.Notifications, "Notificaciones", onNotifications)
-            NavRow(Icons.Filled.History, "Mis fichajes", onFichajes)
-            NavRow(Icons.Filled.Receipt, "Nóminas", onPayroll)
             if (user.isManager) NavRow(Icons.Filled.Groups, "Gestión de equipo", onTeam)
             if (user.isAdmin) NavRow(Icons.Filled.AdminPanelSettings, "Administración", onAdmin)
         } }

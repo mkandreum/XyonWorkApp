@@ -141,3 +141,13 @@ data class CreateNewsRequest(
 )
 @Serializable
 data class UploadResult(val url: String? = null, val fileUrl: String? = null, val path: String? = null)
+
+@Serializable
+data class AttendanceWarning(
+    val id: String = "", val fecha: String = "", val justificado: Boolean = false,
+    val justificacionTexto: String? = null, val leido: Boolean = false, val manager: User? = null,
+    val createdAt: String? = null,
+)
+
+@Serializable
+data class JustifyLateRequest(val justificacion: String)

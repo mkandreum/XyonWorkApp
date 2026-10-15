@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -131,20 +132,28 @@ private fun NewRequestSheet(absence: Boolean, busy: Boolean, onDismiss: () -> Un
     }
 }
 
-// ───────── Calendar (personal / team) ─────────
+// ───────── Calendar (personal / team) — also home of "Mis fichajes" ─────────
 
 @Composable
-fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel()) {
+fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (String) -> Unit = {}) {
+    val x = Xyon.colors
     val events by vm.events.state.collectAsState()
     val mine by vm.mine.state.collectAsState()
     val team by vm.team.state.collectAsState()
+    val adj by vm.adjustments.state.collectAsState()
+    val daysByMonth by vm.days.collectAsState()
     var month by remember { mutableStateOf(YearMonth.now()) }
     var selected by remember { mutableStateOf(LocalDate.now()) }
     var showTeam by remember { mutableStateOf(false) }
+    var adjustFor by remember { mutableStateOf<Fichaje?>(null) }
+    LaunchedEffect(Unit) { vm.msg.collect { snack(it) } }
+    LaunchedEffect(month) { vm.loadMonth(month) }
 
     val myVac = mine.data.orEmpty().filter { it.status == "APPROVED" }
     val teamVac = if (showTeam) team.data.orEmpty().filter { it.status == "APPROVED" } else emptyList()
     val evs = events.data.orEmpty()
+    val monthDays = daysByMonth[month].orEmpty()
+    val statsByDate = monthDays.associateBy { parseDate(it.date) }
 
     fun vacOn(day: LocalDate, list: List<VacationRequest>) = list.filter {
         val s = parseDate(it.startDate); val e = parseDate(it.endDate)
@@ -153,19 +162,19 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel()) {
     fun evOn(day: LocalDate) = evs.filter { parseDate(it.date) == day }
 
     Column(Modifier.fillMaxSize()) {
-        ScreenHeader(if (showTeam) "Calendario del equipo" else "Calendario", null) {
+        ScreenHeader(if (showTeam) "Calendario del equipo" else "Calendario", "Tus fichajes, ausencias y eventos") {
             if (user.isManager) FilterChip(showTeam, { showTeam = !showTeam }, { Text("Equipo") }, leadingIcon = { Icon(Icons.Filled.Groups, null, Modifier.size(18.dp)) })
         }
-        LoadScreen(events, { vm.refresh() }) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                GlassCard(Modifier.fillMaxWidth()) {
+        LoadScreen(events, { vm.refresh(month) }) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 130.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                XyonCard(Modifier.fillMaxWidth().staggered(0)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton({ month = month.minusMonths(1) }) { Icon(Icons.Filled.ChevronLeft, "Anterior") }
+                        IconButton({ month = month.minusMonths(1) }) { Icon(Icons.Filled.ChevronLeft, "Mes anterior") }
                         Text("${monthName(month.monthValue)} ${month.year}", Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge)
-                        IconButton({ month = month.plusMonths(1) }) { Icon(Icons.Filled.ChevronRight, "Siguiente") }
+                        IconButton({ month = month.plusMonths(1) }) { Icon(Icons.Filled.ChevronRight, "Mes siguiente") }
                     }
                     Row(Modifier.fillMaxWidth()) {
-                        listOf("L", "M", "X", "J", "V", "S", "D").forEach { Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, color = Slate500, style = MaterialTheme.typography.labelSmall) }
+                        listOf("L", "M", "X", "J", "V", "S", "D").forEach { Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, color = x.inkSoft, style = MaterialTheme.typography.labelSmall) }
                     }
                     val lead = month.atDay(1).dayOfWeek.value - 1
                     val cells = List(lead) { null } + (1..month.lengthOfMonth()).map { month.atDay(it) }
@@ -176,13 +185,19 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel()) {
                                 Box(Modifier.weight(1f).aspectRatio(1f), contentAlignment = Alignment.Center) {
                                     if (day != null) {
                                         val isSel = day == selected
-                                        val bg by animateColorAsState(if (isSel) Primary600 else if (day == LocalDate.now()) GlassFillStrong else Color.Transparent, spring(Spring.DampingRatioMediumBouncy), label = "d")
-                                        Column(Modifier.fillMaxSize().padding(2.dp).clip(CircleShape).background(bg).clickable { selected = day }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                            Text("${day.dayOfMonth}", fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal)
+                                        val st = statsByDate[day]
+                                        val bg by animateColorAsState(
+                                            if (isSel) x.blue else if (day == LocalDate.now()) Lime.copy(alpha = .35f) else Color.Transparent,
+                                            spring(Spring.DampingRatioMediumBouncy), label = "d",
+                                        )
+                                        Column(Modifier.fillMaxSize().padding(2.dp).clip(CircleShape).background(bg).clickable { selected = day },
+                                            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                            Text("${day.dayOfMonth}", fontWeight = if (isSel) FontWeight.Black else FontWeight.Medium, color = if (isSel) Color.White else x.ink)
                                             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                                if (vacOn(day, myVac).isNotEmpty()) Dot(Success)
+                                                if (st != null && st.fichajes.isNotEmpty()) Dot(if (st.isLate || st.isEarlyDeparture) Sun else Lime)
+                                                if (vacOn(day, myVac).isNotEmpty()) Dot(Lilac)
                                                 if (vacOn(day, teamVac).isNotEmpty()) Dot(Violet)
-                                                if (evOn(day).isNotEmpty()) Dot(Warning)
+                                                if (evOn(day).isNotEmpty()) Dot(Coral)
                                             }
                                         }
                                     }
@@ -190,27 +205,88 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel()) {
                             }
                         }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
-                        Legend(Success, "Mis ausencias"); if (showTeam) Legend(Violet, "Equipo"); Legend(Warning, "Eventos")
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 8.dp).horizontalScroll(rememberScrollState())) {
+                        Legend(Lime, "Fichado"); Legend(Sun, "Incidencia"); Legend(Lilac, "Ausencia")
+                        if (showTeam) Legend(Violet, "Equipo"); Legend(Coral, "Evento")
                     }
                 }
-                Text(fmtDate(selected.toString()), style = MaterialTheme.typography.titleLarge)
+
+                // Monthly summary (same figures as the web)
+                val ok = monthDays.count { it.isComplete && !it.isLate && !it.isEarlyDeparture }
+                val incid = monthDays.count { it.isLate || it.isEarlyDeparture }
+                val hours = monthDays.sumOf { it.horasTrabajadas }
+                Row(Modifier.fillMaxWidth().staggered(1), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    StatPill("Días OK", "$ok", Icons.Filled.CheckCircle, Lime, Modifier.weight(1f))
+                    StatPill("Incidencias", "$incid", Icons.Filled.Warning, Sun, Modifier.weight(1f))
+                    StatPill("Horas", "%.1fh".format(hours), Icons.Filled.Schedule, Lilac, Modifier.weight(1f))
+                }
+
+                Text(fmtDate(selected.toString()).replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(top = 4.dp))
+                val dayStats = statsByDate[selected]
                 val dayEvents = evOn(selected); val dayMine = vacOn(selected, myVac); val dayTeam = vacOn(selected, teamVac)
-                if (dayEvents.isEmpty() && dayMine.isEmpty() && dayTeam.isEmpty()) EmptyState(Icons.Filled.EventAvailable, "Nada programado")
+
+                // My clock-ins for the selected day, with adjustment requests
+                if (dayStats != null && dayStats.fichajes.isNotEmpty()) {
+                    XyonCard(Modifier.fillMaxWidth(), accent = if (dayStats.isLate || dayStats.isEarlyDeparture) Sun else Lime) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Mis fichajes", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                            Text("%.1fh".format(dayStats.horasTrabajadas), fontWeight = FontWeight.Black, color = x.blue)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
+                            if (dayStats.isLate) StatusChip("Retraso", Tone.Warning)
+                            if (dayStats.isEarlyDeparture) StatusChip("Salida anticipada", Tone.Warning)
+                            dayStats.turno?.label?.let { StatusChip(it, Tone.Info) }
+                        }
+                        dayStats.fichajes.forEach { f ->
+                            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(30.dp).clip(CircleShape).background(if (f.tipo == "ENTRADA") Lime else Coral), contentAlignment = Alignment.Center) {
+                                    Icon(if (f.tipo == "ENTRADA") Icons.AutoMirrored.Filled.Login else Icons.AutoMirrored.Filled.Logout, null, tint = InkBlack, modifier = Modifier.size(16.dp))
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Text(if (f.tipo == "ENTRADA") "Entrada" else "Salida", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                                Text(fmtTimeOf(f.timestamp), fontWeight = FontWeight.Black)
+                                TextButton({ adjustFor = f }) { Text("Ajustar") }
+                            }
+                        }
+                    }
+                }
+                if (dayStats?.fichajes.isNullOrEmpty() && dayEvents.isEmpty() && dayMine.isEmpty() && dayTeam.isEmpty()) {
+                    EmptyState(Icons.Filled.EventAvailable, if (selected.isAfter(LocalDate.now())) "Nada programado" else "Sin fichajes ni ausencias")
+                }
                 dayEvents.forEach { e ->
-                    GlassCard(Modifier.fillMaxWidth(), accent = Warning) {
+                    XyonCard(Modifier.fillMaxWidth(), accent = Coral) {
                         Text(e.title, style = MaterialTheme.typography.titleMedium)
-                        e.location?.let { Text(it, color = Slate400) }; e.description?.let { Text(it, color = Slate400) }
+                        e.location?.let { Text(it, color = x.inkSoft) }; e.description?.let { Text(it, color = x.inkSoft) }
                     }
                 }
                 dayMine.forEach { VacationRow(it) }
                 dayTeam.forEach { VacationRow(it) }
+
+                val reqs = adj.data.orEmpty()
+                if (reqs.isNotEmpty()) {
+                    SectionHeader("Mis solicitudes de ajuste")
+                    reqs.take(10).forEach { a ->
+                        XyonCard(Modifier.fillMaxWidth()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("${fmtDate(a.originalTimestamp)} · ${fmtTimeOf(a.originalTimestamp)} → ${fmtTimeOf(a.requestedTimestamp)}", style = MaterialTheme.typography.titleMedium)
+                                    Text(a.reason, color = x.inkSoft, maxLines = 2)
+                                    a.rejectionReason?.let { Text("Motivo: $it", color = Danger, style = MaterialTheme.typography.bodyMedium) }
+                                }
+                                StatusChip(statusLabel(a.status), statusTone(a.status))
+                            }
+                        }
+                    }
+                }
             }
         }
     }
+    adjustFor?.let { f ->
+        AdjustFichajeDialog(f, onDismiss = { adjustFor = null }) { req -> vm.requestAdjustment(req); adjustFor = null }
+    }
 }
 
-@Composable private fun Dot(c: Color) = Box(Modifier.size(5.dp).clip(CircleShape).background(c))
+@Composable private fun Dot(c: Color) = Box(Modifier.size(6.dp).clip(CircleShape).background(c))
 @Composable private fun Legend(c: Color, t: String) = Row(verticalAlignment = Alignment.CenterVertically) {
-    Dot(c); Spacer(Modifier.width(4.dp)); Text(t, color = Slate400, style = MaterialTheme.typography.labelSmall)
+    Dot(c); Spacer(Modifier.width(4.dp)); Text(t, color = Xyon.colors.inkSoft, style = MaterialTheme.typography.labelSmall)
 }

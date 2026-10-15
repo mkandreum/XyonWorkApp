@@ -47,7 +47,13 @@ interface Api {
         @Query("endDate") end: String? = null, @Query("department") dept: String? = null,
     ): List<Fichaje>
     @GET("fichajes/week/{id}") suspend fun fichajeWeek(@Path("id") id: String): List<FichajeDayStats>
-    @GET("fichajes/month/{id}") suspend fun fichajeMonth(@Path("id") id: String): List<FichajeDayStats>
+    @GET("fichajes/month/{id}") suspend fun fichajeMonth(
+        @Path("id") id: String, @Query("year") year: Int? = null, @Query("month") month: Int? = null,
+    ): List<FichajeDayStats>
+
+    // Attendance warnings (late arrival / early departure) sent by a manager
+    @GET("late-notifications") suspend fun lateNotifications(): List<AttendanceWarning>
+    @POST("late-notifications/{id}/justify") suspend fun justifyLate(@Path("id") id: String, @Body b: JustifyLateRequest): AttendanceWarning
     @POST("fichaje-adjustments") suspend fun createAdjustment(@Body b: CreateAdjustmentRequest): FichajeAdjustment
     @GET("fichaje-adjustments") suspend fun myAdjustments(): List<FichajeAdjustment>
 

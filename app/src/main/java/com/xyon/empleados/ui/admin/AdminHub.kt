@@ -109,7 +109,9 @@ fun NavGraphBuilder.adminRoutes(nav: NavHostController, user: User, snack: (Stri
     composable("adm/events") { AdminEventsScreen(back, snack) }
     composable("adm/benefits") { AdminBenefitsScreen(back, snack) }
     composable("adm/news") { AdminNewsScreen(back, snack) }
-    composable("adm/payroll") { AdminPayrollScreen(back, snack) }
+    composable("adm/payroll") {
+        com.xyon.empleados.ui.BiometricGate("Nóminas", "Confirma que eres tú para gestionarlas", back) { AdminPayrollScreen(back, snack) }
+    }
     composable("adm/invites") { AdminInvitesScreen(back, snack) }
     composable("adm/settings") { AdminSettingsScreen(back, snack) }
     composable("adm/layouts") { AdminLayoutsScreen(back, snack) }

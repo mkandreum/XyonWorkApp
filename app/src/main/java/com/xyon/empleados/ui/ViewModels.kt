@@ -44,7 +44,15 @@ class SessionViewModel @Inject constructor(
     val message: SharedFlow<String> = _message.asSharedFlow()
     private var pendingUser: User? = null
 
+    /** True while a logged-in session is covered by the biometric lock (app came back from background). */
+    private val _locked = MutableStateFlow(false)
+    val locked: StateFlow<Boolean> = _locked.asStateFlow()
+
+    private val _rememberedEmail = MutableStateFlow<String?>(null)
+    val rememberedEmail: StateFlow<String?> = _rememberedEmail.asStateFlow()
+
     init {
+        viewModelScope.launch { _rememberedEmail.value = store.rememberedEmail() }
         viewModelScope.launch {
             val has = store.load()
             if (!has) { _auth.value = AuthState.LoggedOut; return@launch }
@@ -58,7 +66,15 @@ class SessionViewModel @Inject constructor(
     }
 
     /** Called after biometric success (or when biometrics disabled). */
-    fun unlock() = enter(pendingUser)
+    fun unlock() {
+        if (_locked.value) { _locked.value = false; return }   // resume lock: the session underneath is intact
+        enter(pendingUser)
+    }
+
+    /** App went to background: cover the session so returning requires biometrics again. */
+    fun onAppBackground() = viewModelScope.launch {
+        if (_auth.value is AuthState.LoggedIn && store.biometricEnabled.first()) _locked.value = true
+    }
 
     private fun enter(cached: User?) {
         viewModelScope.launch {
@@ -80,7 +96,14 @@ class SessionViewModel @Inject constructor(
         safeCall(block).onSuccess { accept(it) }.onFailure { _message.tryEmit(it.userMessage()) }
         _busy.value = false
     }
-    fun doLogin(email: String, pass: String) = run { api.login(LoginRequest(email.trim(), pass)) }
+    fun doLogin(email: String, pass: String, remember: Boolean = false) {
+        viewModelScope.launch {
+            val e = email.trim()
+            store.setRememberedEmail(if (remember) e else null)
+            _rememberedEmail.value = if (remember) e else null
+        }
+        run { api.login(LoginRequest(email.trim(), pass)) }
+    }
     fun doRegister(r: RegisterRequest) = run { api.register(r) }
 
     fun forgot(email: String, done: () -> Unit) = viewModelScope.launch {
@@ -100,11 +123,14 @@ class SessionViewModel @Inject constructor(
     }
 
     fun signOut(msg: String? = null) = viewModelScope.launch {
-        store.clear(); cache.clear(); _auth.value = AuthState.LoggedOut
+        store.clear(); cache.clear(); _locked.value = false; _auth.value = AuthState.LoggedOut
         msg?.let { _message.tryEmit(it) }
     }
 
     fun setBiometric(on: Boolean) = viewModelScope.launch { store.setBiometric(on) }
+
+    val permissionsOnboarded = store.permissionsOnboarded
+    fun finishPermissionsOnboarding() = viewModelScope.launch { store.setPermissionsOnboarded() }
 
     fun updateProfile(req: UpdateProfileRequest) = viewModelScope.launch {
         safeCall { api.updateProfile(req) }.onSuccess {
@@ -136,6 +162,8 @@ class DashboardViewModel @Inject constructor(private val api: Api, lf: LoaderFac
     val balance = lf.create<UserBenefitsBalance>(viewModelScope, "balance") { api.myBalance() }
     val news = lf.create<List<NewsItem>>(viewModelScope, "news") { api.news() }
     val week = lf.create<List<FichajeDayStats>>(viewModelScope, "week") { api.fichajeWeek(me.id()) }
+    /** Attendance warnings from a manager; the unjustified ones are shown on Home. */
+    val warnings = lf.create<List<AttendanceWarning>>(viewModelScope, "late_notifications") { api.lateNotifications() }
 
     private val _busy = MutableStateFlow(false)
     val busy = _busy.asStateFlow()
@@ -144,7 +172,13 @@ class DashboardViewModel @Inject constructor(private val api: Api, lf: LoaderFac
     private val _justDone = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
     val justDone = _justDone.asSharedFlow()
 
-    fun refreshAll() { status.refresh(); vacations.refresh(); balance.refresh(); news.refresh(); week.refresh() }
+    fun refreshAll() { status.refresh(); vacations.refresh(); balance.refresh(); news.refresh(); week.refresh(); warnings.refresh() }
+
+    fun justify(id: String, text: String) = viewModelScope.launch {
+        safeCall { api.justifyLate(id, JustifyLateRequest(text.trim())) }
+            .onSuccess { _events.tryEmit("Justificación enviada"); warnings.refresh() }
+            .onFailure { _events.tryEmit(it.userMessage()) }
+    }
 
     fun fichar(entering: Boolean, lat: Double?, lon: Double?, acc: Float?) = viewModelScope.launch {
         _busy.value = true
@@ -184,11 +218,33 @@ class VacationsViewModel @Inject constructor(private val api: Api, lf: LoaderFac
 }
 
 @HiltViewModel
-class CalendarViewModel @Inject constructor(private val api: Api, lf: LoaderFactory) : ViewModel() {
+class CalendarViewModel @Inject constructor(private val api: Api, lf: LoaderFactory, private val me: MeProvider) : ViewModel() {
     val events = lf.create<List<EventItem>>(viewModelScope, "events") { api.events() }
     val mine = lf.create<List<VacationRequest>>(viewModelScope, "vacations") { api.vacations() }
     val team = lf.create<List<VacationRequest>>(viewModelScope, "team_vacations") { api.teamVacations() }
-    fun refresh() { events.refresh(); mine.refresh(); team.refresh() }
+    val adjustments = lf.create<List<FichajeAdjustment>>(viewModelScope, "my_adjustments") { api.myAdjustments() }
+
+    /** My clock-ins per day, loaded per visible month (the calendar is where "Mis fichajes" lives). */
+    private val _days = MutableStateFlow<Map<java.time.YearMonth, List<FichajeDayStats>>>(emptyMap())
+    val days = _days.asStateFlow()
+    private val _msg = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val msg = _msg.asSharedFlow()
+
+    fun loadMonth(ym: java.time.YearMonth, force: Boolean = false) = viewModelScope.launch {
+        if (!force && _days.value.containsKey(ym)) return@launch
+        safeCall { api.fichajeMonth(me.id(), ym.year, ym.monthValue) }
+            .onSuccess { list -> _days.update { it + (ym to list) } }
+    }
+
+    fun requestAdjustment(r: CreateAdjustmentRequest) = viewModelScope.launch {
+        safeCall { api.createAdjustment(r) }.onSuccess { _msg.tryEmit("Solicitud de ajuste enviada"); adjustments.refresh() }
+            .onFailure { _msg.tryEmit(it.userMessage()) }
+    }
+
+    fun refresh(current: java.time.YearMonth? = null) {
+        events.refresh(); mine.refresh(); team.refresh(); adjustments.refresh()
+        current?.let { loadMonth(it, force = true) }
+    }
 }
 
 @HiltViewModel
@@ -199,23 +255,30 @@ class NewsViewModel @Inject constructor(api: Api, lf: LoaderFactory) : ViewModel
 @HiltViewModel
 class PayrollViewModel @Inject constructor(private val api: Api, lf: LoaderFactory) : ViewModel() {
     val items = lf.create<List<Payroll>>(viewModelScope, "payrolls") { api.payrolls() }
-    private val _file = MutableSharedFlow<Pair<ByteArray, String>>(extraBufferCapacity = 1)
+
+    /** A downloaded payslip and what to do with it: open in a viewer or save to Downloads. */
+    data class PayslipFile(val bytes: ByteArray, val name: String, val save: Boolean)
+
+    private val _file = MutableSharedFlow<PayslipFile>(extraBufferCapacity = 1)
     val file = _file.asSharedFlow()
     private val _msg = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val msg = _msg.asSharedFlow()
     private val _busy = MutableStateFlow<String?>(null)
     val busy = _busy.asStateFlow()
 
-    fun open(p: Payroll) = viewModelScope.launch {
+    fun open(p: Payroll, save: Boolean = false) = viewModelScope.launch {
         _busy.value = p.id
         safeCall {
             val info = api.payrollDownload(p.id)
             val url = info.pdfUrl ?: error("Sin archivo")
-            val full = if (url.startsWith("http")) url else com.xyon.empleados.BuildConfig.API_BASE_URL.removeSuffix("api/") + url.removePrefix("/")
-            // Only allow downloading from the API host over HTTPS
-            require(full.startsWith("https://")) { "URL no segura" }
+            val base = com.xyon.empleados.BuildConfig.API_BASE_URL
+            val full = if (url.startsWith("http")) url else base.removeSuffix("api/") + url.removePrefix("/")
+            // Only download from our own API host over HTTPS
+            val apiHost = android.net.Uri.parse(base).host
+            val uri = android.net.Uri.parse(full)
+            require(uri.scheme == "https" && uri.host == apiHost) { "URL no segura" }
             val bytes = api.download(full).bytes()
-            bytes to (info.filename ?: "nomina_${p.month}_${p.year}.pdf")
+            PayslipFile(bytes, info.filename ?: "nomina_${p.month}_${p.year}.pdf", save)
         }.onSuccess { _file.tryEmit(it) }.onFailure { _msg.tryEmit(it.userMessage()) }
         _busy.value = null
     }
@@ -227,18 +290,6 @@ class NotificationsViewModel @Inject constructor(private val api: Api, lf: Loade
     fun read(id: String) = viewModelScope.launch { safeCall { api.readNotification(id) }; items.refresh() }
     fun readAll() = viewModelScope.launch { safeCall { api.readAllNotifications() }; items.refresh() }
     fun delete(id: String) = viewModelScope.launch { safeCall { api.deleteNotification(id) }; items.refresh() }
-}
-
-@HiltViewModel
-class FichajesViewModel @Inject constructor(private val api: Api, lf: LoaderFactory, me: MeProvider) : ViewModel() {
-    val month = lf.create<List<FichajeDayStats>>(viewModelScope, "month") { api.fichajeMonth(me.id()) }
-    val adjustments = lf.create<List<FichajeAdjustment>>(viewModelScope, "my_adjustments") { api.myAdjustments() }
-    private val _msg = MutableSharedFlow<String>(extraBufferCapacity = 4)
-    val msg = _msg.asSharedFlow()
-    fun requestAdjustment(r: CreateAdjustmentRequest) = viewModelScope.launch {
-        safeCall { api.createAdjustment(r) }.onSuccess { _msg.tryEmit("Solicitud de ajuste enviada"); adjustments.refresh() }
-            .onFailure { _msg.tryEmit(it.userMessage()) }
-    }
 }
 
 /** Manager: team requests, adjustments, team members. */

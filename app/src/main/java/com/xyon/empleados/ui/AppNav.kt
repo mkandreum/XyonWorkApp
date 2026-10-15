@@ -45,6 +45,7 @@ private val TABS = listOf(
     Tab("home", "Inicio", Icons.Filled.Home),
     Tab("calendar", "Calendario", Icons.Filled.CalendarMonth),
     Tab("requests", "Solicitudes", Icons.Filled.BeachAccess),
+    Tab("payroll", "Nóminas", Icons.Filled.Receipt),
     Tab("news", "Noticias", Icons.Filled.Newspaper),
     Tab("profile", "Perfil", Icons.Filled.Person),
 )
@@ -52,8 +53,29 @@ private val TABS = listOf(
 @Composable
 fun AppRoot(vm: SessionViewModel = hiltViewModel()) {
     val auth by vm.auth.collectAsState()
+    val locked by vm.locked.collectAsState()
+    val bioEnabled by vm.biometricEnabled.collectAsState(initial = false)
+    // initial=true so the walkthrough never flashes before the stored flag is read
+    val onboarded by vm.permissionsOnboarded.collectAsState(initial = true)
     val snack = remember { SnackbarHostState() }
+    val activity = LocalContext.current as FragmentActivity
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(Unit) { vm.message.collect { snack.showSnackbar(it) } }
+
+    // Leaving the app (home, app switcher, screen off) locks it; trips the app itself started
+    // (PIN screen, pickers, share) and configuration changes (rotation) do not.
+    DisposableEffect(lifecycle) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_STOP && !activity.isChangingConfigurations && !AppLock.externalActive) vm.onAppBackground()
+        }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs) }
+    }
+    // With the lock on, hide the app's content in the recent-apps preview (Android 13+).
+    LaunchedEffect(bioEnabled) {
+        if (android.os.Build.VERSION.SDK_INT >= 33) activity.setRecentsScreenshotEnabled(!bioEnabled)
+    }
+
     Box(Modifier.fillMaxSize()) {
         AnimatedContent(
             auth::class, label = "auth",
@@ -65,6 +87,22 @@ fun AppRoot(vm: SessionViewModel = hiltViewModel()) {
                 AuthState.Locked::class -> LockScreen(vm)
                 else -> (auth as? AuthState.LoggedIn)?.let { MainShell(it.user, vm, snack) }
             }
+        }
+        // First login on this device: permissions walkthrough
+        AnimatedVisibility(
+            !onboarded && auth is AuthState.LoggedIn && !locked,
+            enter = fadeIn(tween(250)) + slideInVertically { it / 6 }, exit = fadeOut(tween(250)),
+        ) {
+            Box(Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, null) {}) {
+                PermissionsScreen(vm) { vm.finishPermissionsOnboarding() }
+            }
+        }
+        // Resume lock sits on top of the live session so the user returns to exactly where they were.
+        AnimatedVisibility(
+            locked && auth is AuthState.LoggedIn,
+            enter = fadeIn(tween(150)), exit = fadeOut(tween(250)) + scaleOut(targetScale = 1.04f),
+        ) {
+            Box(Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, null) {}) { LockScreen(vm) }
         }
         SnackbarHost(snack, Modifier.align(Alignment.TopCenter).statusBarsPadding())
     }
@@ -110,9 +148,9 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
                     popExitTransition = { slideOutHorizontally { it / 4 } + fadeOut(tween(200)) },
                 ) {
                     composable("home") { Scoped(this) {
-                        HomeScreen(user, { push("notifications") }, { push("fichajes") }, { push("payroll") }, { tab("news") }, { push("team") }, { push("admin") }, snack = say)
+                        HomeScreen(user, { push("notifications") }, { tab("calendar") }, { tab("payroll") }, { tab("news") }, { push("team") }, { push("admin") }, snack = say)
                     } }
-                    composable("calendar") { Scoped(this) { CalendarScreen(user) } }
+                    composable("calendar") { Scoped(this) { CalendarScreen(user, snack = say) } }
                     composable("requests") { Scoped(this) { RequestsScreen(snack = say) } }
                     composable("news") { Scoped(this) { NewsScreen(newsVm) { n -> push("news/${n.id}") } } }
                     composable("news/{id}") { e -> Scoped(this) {
@@ -120,15 +158,18 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
                         NewsDetailScreen(newsState.data?.firstOrNull { it.id == id }) { nav.popBackStack() }
                     } }
                     composable("profile") { Scoped(this) {
-                        ProfileScreen(user, session, { push("notifications") }, { push("payroll") }, { push("fichajes") }, { push("team") }, { push("admin") }) { on ->
+                        ProfileScreen(user, session, { push("notifications") }, { tab("payroll") }, { tab("calendar") }, { push("team") }, { push("admin") }) { on ->
                             if (!on) session.setBiometric(false)
                             else if (canAuthenticate(act)) promptBiometric(act, "Activar desbloqueo", { session.setBiometric(true) }, { say(it) })
                             else say("Este dispositivo no tiene biometría o PIN configurado")
                         }
                     } }
                     composable("notifications") { Scoped(this) { NotificationsScreen({ nav.popBackStack() }) } }
-                    composable("fichajes") { Scoped(this) { FichajesScreen({ nav.popBackStack() }, snack = say) } }
-                    composable("payroll") { Scoped(this) { PayrollScreen({ nav.popBackStack() }, snack = say) } }
+                    composable("payroll") { Scoped(this) {
+                        BiometricGate("Tus nóminas", "Confirma que eres tú para verlas", { tab("home") }) {
+                            PayrollScreen(null, snack = say)
+                        }
+                    } }
                     adminRoutes(nav, user, say)
                 }
             }
@@ -152,7 +193,7 @@ private fun BottomBar(selected: String, onSelect: (String) -> Unit) {
     val haptic = LocalHapticFeedback.current
     val x = Xyon.colors
     val idx = TABS.indexOfFirst { it.route == selected }.coerceAtLeast(0)
-    val item = 58.dp
+    val item = if (TABS.size > 5) 52.dp else 58.dp
     Box(Modifier.navigationBarsPadding().padding(bottom = 14.dp)) {
         Box(Modifier.clip(CircleShape).background(x.capsule).border(1.5.dp, if (x.dark) x.outline else Color.Transparent, CircleShape).padding(7.dp)) {
             val ind by animateDpAsState(item * idx, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "ind")

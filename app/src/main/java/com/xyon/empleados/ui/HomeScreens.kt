@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +41,8 @@ fun HomeScreen(
     val news by vm.news.state.collectAsState()
     val week by vm.week.state.collectAsState()
     val notifs by notifVm.items.state.collectAsState()
+    val warnings by vm.warnings.state.collectAsState()
+    var justifyFor by remember { mutableStateOf<AttendanceWarning?>(null) }
     val busy by vm.busy.collectAsState()
     LaunchedEffect(Unit) { vm.events.collect { snack(it) } }
 
@@ -86,6 +89,10 @@ fun HomeScreen(
                     }
                 } }
             }
+            val pendingWarnings = warnings.data.orEmpty().filter { w -> !w.justificado }
+            if (pendingWarnings.isNotEmpty()) {
+                item { AttendanceAlert(pendingWarnings, Modifier.staggered(1)) { w -> justifyFor = w } }
+            }
             item {
                 val pending = vacations.data?.count { v -> v.status.startsWith("PENDING") } ?: 0
                 val left = balance.data?.vacationDaysUsed
@@ -127,6 +134,58 @@ fun HomeScreen(
             }
         }
     }
+    justifyFor?.let { w ->
+        var text by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { justifyFor = null }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("Justificar aviso") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Aviso del ${fmtDate(w.fecha)}${w.manager?.name?.let { n -> " · $n" } ?: ""}", color = Xyon.colors.inkSoft)
+                    XField(text, { text = it }, "Explica el motivo", singleLine = false, minLines = 3)
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = text.trim().length >= 5, onClick = { vm.justify(w.id, text); justifyFor = null }) { Text("Enviar") }
+            },
+            dismissButton = { TextButton({ justifyFor = null }) { Text("Cancelar") } },
+        )
+    }
+}
+
+/** Coral attendance-warning card (web Dashboard "Tienes N avisos de asistencia"). */
+@Composable
+private fun AttendanceAlert(list: List<AttendanceWarning>, modifier: Modifier = Modifier, onJustify: (AttendanceWarning) -> Unit) {
+    val shape = RoundedCornerShape(28.dp)
+    Column(
+        modifier.fillMaxWidth().clip(shape).background(Coral).border(1.5.dp, Xyon.colors.outline, shape)
+            .drawBehind { drawSparkle(androidx.compose.ui.geometry.Offset(size.width - 34.dp.toPx(), 34.dp.toPx()), 22.dp.toPx(), Color.White.copy(alpha = .6f)) }
+            .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Warning, null, tint = InkBlack)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "Tienes ${list.size} ${if (list.size == 1) "aviso" else "avisos"} de asistencia",
+                color = InkBlack, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(end = 36.dp),
+            )
+        }
+        list.take(3).forEach { w ->
+            Row(
+                Modifier.fillMaxWidth().clip(CircleShape).background(Color.White.copy(alpha = .6f)).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(fmtDate(w.fecha).replaceFirstChar { it.uppercase() }, color = InkBlack, fontWeight = FontWeight.Bold)
+                    w.manager?.name?.let { Text(it, color = InkBlack.copy(alpha = .7f), style = MaterialTheme.typography.labelSmall) }
+                }
+                Text("Justificar", color = Color.White, fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.clip(CircleShape).background(InkBlack).clickable { onJustify(w) }.padding(horizontal = 14.dp, vertical = 9.dp))
+            }
+        }
+        if (list.size > 3) Text("… y ${list.size - 3} más", color = InkBlack, fontWeight = FontWeight.SemiBold)
+    }
 }
 
 @Composable
@@ -154,81 +213,34 @@ fun VacationRow(v: VacationRequest, modifier: Modifier = Modifier, trailing: (@C
     }
 }
 
-// ───────── Fichajes history + adjustment request ─────────
+// ───────── Adjustment request (used from the calendar) ─────────
 
+/** "Solicitar ajuste" dialog for one clock-in/out: corrected time (same day) and a reason. */
 @Composable
-fun FichajesScreen(onBack: () -> Unit, vm: FichajesViewModel = hiltViewModel(), snack: (String) -> Unit) {
-    val month by vm.month.state.collectAsState()
-    val adj by vm.adjustments.state.collectAsState()
-    var adjustFor by remember { mutableStateOf<Fichaje?>(null) }
-    LaunchedEffect(Unit) { vm.msg.collect { snack(it) } }
-    Column(Modifier.fillMaxSize()) {
-        ScreenHeader("Mis fichajes", "Mes actual", onBack)
-        LoadScreen(month, { vm.month.refresh(); vm.adjustments.refresh() }) { days ->
-            ListScreenColumn {
-                val list = days.filter { it.fichajes.isNotEmpty() }.sortedByDescending { it.date }
-                if (list.isEmpty()) item { EmptyState(Icons.Filled.EventBusy, "Sin fichajes este mes") }
-                staggeredItems(list, { it.date }) { _, d ->
-                    GlassCard(Modifier.fillMaxWidth()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(fmtDate(d.date), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                            if (d.isLate) StatusChip("Retraso", Tone.Warning)
-                            if (d.isEarlyDeparture) { Spacer(Modifier.width(4.dp)); StatusChip("Salida anticipada", Tone.Warning) }
-                            Spacer(Modifier.width(8.dp)); Text("%.1fh".format(d.horasTrabajadas), fontWeight = FontWeight.Bold, color = Primary400)
-                        }
-                        d.fichajes.forEach { f ->
-                            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(if (f.tipo == "ENTRADA") Icons.Filled.Login else Icons.Filled.Logout, null, tint = if (f.tipo == "ENTRADA") Success else Warning, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text("${f.tipo.lowercase().replaceFirstChar { it.uppercase() }}  ${fmtTimeOf(f.timestamp)}", Modifier.weight(1f))
-                                TextButton({ adjustFor = f }) { Text("Ajustar") }
-                            }
-                        }
-                    }
-                }
-                val reqs = adj.data.orEmpty()
-                if (reqs.isNotEmpty()) {
-                    item { SectionTitle("Mis solicitudes de ajuste") }
-                    staggeredItems(reqs, { it.id }) { _, a ->
-                        GlassCard(Modifier.fillMaxWidth()) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("${fmtTimeOf(a.originalTimestamp)} → ${fmtTimeOf(a.requestedTimestamp)}", style = MaterialTheme.typography.titleMedium)
-                                    Text(a.reason, color = Slate400, maxLines = 2)
-                                    a.rejectionReason?.let { Text("Motivo: $it", color = Danger, style = MaterialTheme.typography.bodyMedium) }
-                                }
-                                StatusChip(statusLabel(a.status), statusTone(a.status))
-                            }
-                        }
-                    }
-                }
+fun AdjustFichajeDialog(f: Fichaje, onDismiss: () -> Unit, onSend: (CreateAdjustmentRequest) -> Unit) {
+    var time by remember { mutableStateOf(fmtTimeOf(f.timestamp)) }
+    var reason by remember { mutableStateOf("") }
+    val valid = Regex("^([01]\\d|2[0-3]):[0-5]\\d$").matches(time) && reason.trim().length >= 5
+    AlertDialog(
+        onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        title = { Text("Solicitar ajuste") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("${if (f.tipo == "ENTRADA") "Entrada" else "Salida"} del ${fmtDate(f.timestamp)} a las ${fmtTimeOf(f.timestamp)}", color = Xyon.colors.inkSoft)
+                XField(time, { time = it }, "Hora correcta (HH:mm)")
+                XField(reason, { reason = it }, "Motivo (mín. 5 caracteres)", singleLine = false, minLines = 2)
             }
-        }
-    }
-    adjustFor?.let { f ->
-        var time by remember { mutableStateOf(fmtTimeOf(f.timestamp)) }
-        var reason by remember { mutableStateOf("") }
-        val valid = Regex("^([01]\\d|2[0-3]):[0-5]\\d$").matches(time) && reason.length >= 5
-        AlertDialog(
-            onDismissRequest = { adjustFor = null }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            title = { Text("Solicitar ajuste") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    XField(time, { time = it }, "Hora correcta (HH:mm)")
-                    XField(reason, { reason = it }, "Motivo", singleLine = false, minLines = 2)
-                }
-            },
-            confirmButton = {
-                TextButton(enabled = valid, onClick = {
-                    val date = parseDate(f.timestamp)!!
-                    val ldt = java.time.LocalDateTime.of(date, java.time.LocalTime.parse(time))
-                    val iso = ldt.atZone(java.time.ZoneId.systemDefault()).toInstant().toString()
-                    vm.requestAdjustment(CreateAdjustmentRequest(f.id, iso, reason.trim())); adjustFor = null
-                }) { Text("Enviar") }
-            },
-            dismissButton = { TextButton({ adjustFor = null }) { Text("Cancelar") } },
-        )
-    }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = {
+                val date = parseDate(f.timestamp) ?: return@TextButton
+                val ldt = java.time.LocalDateTime.of(date, java.time.LocalTime.parse(time))
+                val iso = ldt.atZone(java.time.ZoneId.systemDefault()).toInstant().toString()
+                onSend(CreateAdjustmentRequest(f.id, iso, reason.trim()))
+            }) { Text("Enviar") }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("Cancelar") } },
+    )
 }
 
 // ───────── Notifications ─────────

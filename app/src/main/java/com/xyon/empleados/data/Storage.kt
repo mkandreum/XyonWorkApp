@@ -91,6 +91,18 @@ class SessionStore @Inject constructor(@ApplicationContext private val ctx: Cont
 
     val biometricEnabled: Flow<Boolean> = ctx.sessionDs.data.map { it[bioKey] ?: false }
     suspend fun setBiometric(on: Boolean) = ctx.sessionDs.edit { it[bioKey] = on }
+
+    /** First-run permissions walkthrough already shown on this device. */
+    private val onboardedKey = booleanPreferencesKey("permissions_onboarded")
+    val permissionsOnboarded: Flow<Boolean> = ctx.sessionDs.data.map { it[onboardedKey] ?: false }
+    suspend fun setPermissionsOnboarded() = ctx.sessionDs.edit { it[onboardedKey] = true }
+
+    /** "Recordarme" on the login screen: only the email is kept, never the password. */
+    private val rememberedEmailKey = stringPreferencesKey("remembered_email")
+    suspend fun rememberedEmail(): String? = ctx.sessionDs.data.first()[rememberedEmailKey]
+    suspend fun setRememberedEmail(email: String?) = ctx.sessionDs.edit {
+        if (email.isNullOrBlank()) it.remove(rememberedEmailKey) else it[rememberedEmailKey] = email
+    }
 }
 
 /** Simple JSON offline cache (DataStore), keyed per resource and wiped on logout. */
