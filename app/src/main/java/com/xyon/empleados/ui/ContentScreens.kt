@@ -234,10 +234,24 @@ fun ProfileScreen(
                 Icon(Icons.Filled.Alarm, null, tint = x.blue); Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Recordatorios de fichaje")
-                    Text("Aviso si se te pasa la entrada o la salida", color = x.inkSoft, style = MaterialTheme.typography.bodyMedium)
+                    Text("Aviso 5 minutos antes del inicio de tu turno", color = x.inkSoft, style = MaterialTheme.typography.bodyMedium)
                 }
                 Switch(reminders, { on -> reminders = on; Reminders.setEnabled(ctx, on) },
                     colors = SwitchDefaults.colors(checkedTrackColor = x.blue, checkedThumbColor = Lime))
+            }
+            // Special access that existing users may need to grant after Android 14.
+            if (reminders && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                val alarms = ctx.getSystemService(android.app.AlarmManager::class.java)
+                if (alarms?.canScheduleExactAlarms() != true) {
+                    NavRow(Icons.Filled.Alarm, "Permitir avisos exactos", {
+                        val pkg = android.net.Uri.parse("package:${ctx.packageName}")
+                        runCatching {
+                            ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkg))
+                        }.onFailure {
+                            ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg))
+                        }
+                    })
+                }
             }
             Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Fingerprint, null, tint = x.blue); Spacer(Modifier.width(14.dp))

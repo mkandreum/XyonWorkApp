@@ -72,7 +72,10 @@ fun FichajeHero(
     LaunchedEffect(clockedIn, since) {
         while (clockedIn && since != null) {
             val d = runCatching { Duration.between(Instant.parse(since), Instant.now()) }.getOrNull()
-            elapsed = d?.let { "%02d:%02d:%02d".format(it.toHours(), it.toMinutesPart(), it.toSecondsPart()) } ?: ""
+            // toMinutesPart()/toSecondsPart() are API 31; minSdk is 26.
+            elapsed = d?.let {
+                "%02d:%02d:%02d".format(it.toHours(), it.toMinutes() % 60, it.seconds % 60)
+            } ?: ""
             delay(1000)
         }
     }

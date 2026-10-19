@@ -58,9 +58,16 @@ fun HomeScreen(
         pendingToggle?.let { e -> go(e); pendingToggle = null }
     }
 
-    // Keep local clock-in/out reminders in sync with the latest status
+    // The alarm receiver skips the nudge when this device already knows the user is
+    // clocked in. An entry from yesterday with no exit (night shift) still counts.
     LaunchedEffect(status.data) {
-        status.data?.let { s -> Reminders.sync(ctx, s.hasActiveEntry, s.turno?.expectedEntry, s.turno?.expectedExit) }
+        status.data?.let { s ->
+            val activeEntry = s.currentFichaje ?: s.missingExit
+            val entryAt = activeEntry?.timestamp?.let { ts ->
+                runCatching { java.time.Instant.parse(ts).toEpochMilli() }.getOrNull()
+            }
+            Reminders.setClockedIn(ctx, s.hasActiveEntry || s.missingExit != null, entryAt)
+        }
     }
 
     val unread = notifs.data?.notifications?.count { !it.read } ?: 0

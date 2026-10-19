@@ -33,7 +33,8 @@ val User.isAdmin get() = role == "ADMIN"
 /** App-wide session: login/register/recovery, biometric unlock, profile. */
 @HiltViewModel
 class SessionViewModel @Inject constructor(
-    private val api: Api, private val store: SessionStore, private val cache: CacheStore, private val json: kotlinx.serialization.json.Json,
+    private val api: Api, private val store: SessionStore, private val cache: CacheStore,
+    private val json: kotlinx.serialization.json.Json, private val reminders: ReminderScheduler,
 ) : ViewModel() {
     private val _auth = MutableStateFlow<AuthState>(AuthState.Loading)
     val auth: StateFlow<AuthState> = _auth.asStateFlow()
@@ -81,7 +82,15 @@ class SessionViewModel @Inject constructor(
             if (cached != null) _auth.value = AuthState.LoggedIn(cached)
             safeCall { api.profile() }.onSuccess {
                 cache.put("me", json.encodeToString(User.serializer(), it)); _auth.value = AuthState.LoggedIn(it)
-            }.onFailure { if (cached == null) { if (it.isOffline) _message.tryEmit(it.userMessage()) else signOut(null) } }
+                reminders.refresh()
+            }.onFailure {
+                if (cached == null) {
+                    if (it.isOffline) _message.tryEmit(it.userMessage()) else signOut(null)
+                } else if (it.isOffline) {
+                    // Offline start: keep the previous plan if the API is unreachable.
+                    reminders.refresh()
+                }
+            }
         }
     }
 
@@ -89,6 +98,7 @@ class SessionViewModel @Inject constructor(
         store.saveToken(r.token)
         cache.put("me", json.encodeToString(User.serializer(), r.user))
         _auth.value = AuthState.LoggedIn(r.user)
+        reminders.refresh()
     }
 
     private fun run(block: suspend () -> AuthResponse) = viewModelScope.launch {
@@ -123,7 +133,11 @@ class SessionViewModel @Inject constructor(
     }
 
     fun signOut(msg: String? = null) = viewModelScope.launch {
-        store.clear(); cache.clear(); _locked.value = false; _auth.value = AuthState.LoggedOut
+        // Clear the token first: an in-flight schedule refresh must not re-arm
+        // alarms for a session that is already closed.
+        store.clear(); cache.clear()
+        reminders.cancel()
+        _locked.value = false; _auth.value = AuthState.LoggedOut
         msg?.let { _message.tryEmit(it) }
     }
 
@@ -156,7 +170,9 @@ class SessionViewModel @Inject constructor(
 
 /** Dashboard: fichaje status + summary widgets. */
 @HiltViewModel
-class DashboardViewModel @Inject constructor(private val api: Api, lf: LoaderFactory, me: MeProvider) : ViewModel() {
+class DashboardViewModel @Inject constructor(
+    private val api: Api, lf: LoaderFactory, me: MeProvider, private val reminders: ReminderScheduler,
+) : ViewModel() {
     val status = lf.create<FichajeStatus>(viewModelScope, "fichaje_current") { api.fichajeCurrent() }
     val vacations = lf.create<List<VacationRequest>>(viewModelScope, "vacations") { api.vacations() }
     val balance = lf.create<UserBenefitsBalance>(viewModelScope, "balance") { api.myBalance() }
@@ -172,7 +188,10 @@ class DashboardViewModel @Inject constructor(private val api: Api, lf: LoaderFac
     private val _justDone = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
     val justDone = _justDone.asSharedFlow()
 
-    fun refreshAll() { status.refresh(); vacations.refresh(); balance.refresh(); news.refresh(); week.refresh(); warnings.refresh() }
+    fun refreshAll() {
+        status.refresh(); vacations.refresh(); balance.refresh(); news.refresh(); week.refresh(); warnings.refresh()
+        viewModelScope.launch { reminders.refresh() }
+    }
 
     fun justify(id: String, text: String) = viewModelScope.launch {
         safeCall { api.justifyLate(id, JustifyLateRequest(text.trim())) }
@@ -185,6 +204,7 @@ class DashboardViewModel @Inject constructor(private val api: Api, lf: LoaderFac
         val tipo = if (entering) "ENTRADA" else "SALIDA"
         safeCall { api.fichar(CreateFichajeRequest(tipo, lat, lon, acc)) }.onSuccess {
             it.status?.let { s -> status.set(s) } ; status.refresh(); week.refresh()
+            reminders.refresh()
             _justDone.tryEmit(entering)
             it.warning?.let { w -> _events.tryEmit(w) }
         }.onFailure { _events.tryEmit(it.userMessage()) }
@@ -304,6 +324,21 @@ class NotificationsViewModel @Inject constructor(private val api: Api, lf: Loade
 
 @javax.inject.Singleton
 class MeProvider @Inject constructor(private val cache: CacheStore, private val api: Api, private val json: kotlinx.serialization.json.Json) {
-    suspend fun id(): String =
-        cache.get("me")?.let { runCatching { json.decodeFromString<User>(it).id }.getOrNull() } ?: api.profile().id
+    suspend fun id(): String = user().id
+
+    /**
+     * Cached profile first; refreshes it from the API when the cache is empty.
+     * [forceRefresh] is used by the background reminder worker so a department
+     * change made by an admin is picked up without opening the app.
+     */
+    suspend fun user(forceRefresh: Boolean = false): User {
+        if (!forceRefresh) {
+            cache.get("me")?.let { raw ->
+                runCatching { json.decodeFromString<User>(raw) }.getOrNull()?.let { if (it.id.isNotBlank()) return it }
+            }
+        }
+        val fresh = api.profile()
+        cache.put("me", json.encodeToString(User.serializer(), fresh))
+        return fresh
+    }
 }

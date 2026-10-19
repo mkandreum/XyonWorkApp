@@ -1,8 +1,12 @@
 package com.xyon.empleados.ui
 
 import android.Manifest
+import android.app.AlarmManager
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -88,6 +92,26 @@ fun PermissionsScreen(session: SessionViewModel, onDone: () -> Unit) {
                     val ok = granted(item)
                     PermCard(item.title, item.why, item.icon, item.color, ok, Modifier.staggered(i)) {
                         launcher.launch(item.perms.toTypedArray())
+                    }
+                }
+            }
+
+            // Exact alarms are a special access on Android 12+, not a runtime permission.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val alarms = ctx.getSystemService(AlarmManager::class.java)
+                if (alarms?.canScheduleExactAlarms() != true) {
+                    PermCard(
+                        "Recordatorios exactos",
+                        "Así el aviso de fichaje llega justo 5 minutos antes, aunque el móvil esté en reposo.",
+                        Icons.Filled.Alarm, Sun, false, Modifier.staggered(items.size),
+                        actionLabel = "Permitir",
+                    ) {
+                        val packageUri = Uri.parse("package:${ctx.packageName}")
+                        runCatching {
+                            ctx.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, packageUri))
+                        }.onFailure {
+                            ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri))
+                        }
                     }
                 }
             }

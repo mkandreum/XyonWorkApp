@@ -44,6 +44,16 @@ interface Api {
     // Fichajes
     @POST("fichajes") suspend fun fichar(@Body b: CreateFichajeRequest): CreateFichajeResponse
     @GET("fichajes/current") suspend fun fichajeCurrent(): FichajeStatus
+
+    // Schedule data for the local clock-in reminders. The backend only lets an
+    // employee read their own department/assignments.
+    @GET("department-schedules/{department}") suspend fun departmentShifts(@Path("department") department: String): List<DepartmentShiftInfo>
+    @GET("user-shift-assignments") suspend fun shiftAssignments(
+        @Query("userId") userId: String, @Query("month") month: Int, @Query("year") year: Int,
+    ): List<ShiftAssignmentInfo>
+    @GET("schedule-overrides") suspend fun scheduleOverrides(
+        @Query("userId") userId: String?, @Query("from") from: String?, @Query("to") to: String?,
+    ): List<ScheduleOverrideInfo>
     @GET("fichajes/history") suspend fun fichajeHistory(
         @Query("userId") userId: String? = null, @Query("startDate") start: String? = null,
         @Query("endDate") end: String? = null, @Query("department") dept: String? = null,

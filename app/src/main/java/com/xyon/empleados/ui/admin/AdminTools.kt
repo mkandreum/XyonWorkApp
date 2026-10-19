@@ -45,7 +45,7 @@ class AdminImportVm @Inject constructor(private val api: AdminApi) : AdminVm() {
     val result = MutableStateFlow<ImportResponse?>(null)
 
     fun setFile(name: String, text: String) {
-        val clean = text.removePrefix("﻿")
+        val clean = text.removePrefix("\uFEFF")
         csv.value = clean; fileName.value = name; result.value = null
         rowCount.value = (clean.lines().count { it.isNotBlank() } - 1).coerceAtLeast(0)
     }

@@ -7,5 +7,7 @@
 -keepclasseswithmembers class com.xyon.empleados.** { kotlinx.serialization.KSerializer serializer(...); }
 -keep,allowobfuscation,allowshrinking interface retrofit2.Call
 -keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation
+# WorkManager instantiates this worker by reflection (no HiltWorkerFactory).
+-keep class com.xyon.empleados.ui.ReminderSyncWorker { *; }
 # Strip all logging in release
 -assumenosideeffects class android.util.Log { public static *** v(...); public static *** d(...); public static *** i(...); public static *** w(...); public static *** e(...); }

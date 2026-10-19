@@ -18,7 +18,14 @@ import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
-class XyonApp : Application()
+class XyonApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        // WorkManager initialises before Application.onCreate; this only enqueues
+        // the periodic schedule refresh (no-op until the user logs in).
+        runCatching { com.xyon.empleados.ui.Reminders.ensurePeriodicSync(this) }
+    }
+}
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
