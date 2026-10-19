@@ -137,6 +137,8 @@ fun LoginScreen(vm: SessionViewModel, onRegister: () -> Unit, onForgot: () -> Un
     var remember by remember { mutableStateOf(false) }
     LaunchedEffect(remembered) { remembered?.let { if (email.isBlank()) { email = it; remember = true } } }
     val busy by vm.busy.collectAsState()
+    val challenge by vm.mfaChallenge.collectAsState()
+    if (challenge != null) { MfaCodeStep(vm, busy); return }
     AuthShell(
         "Tu jornada,\nsin fricción.", "Ficha, pide vacaciones y consulta tus nóminas desde un solo sitio.",
         "Hola de nuevo", "Inicia sesión en tu portal del empleado", null,
@@ -154,6 +156,19 @@ fun LoginScreen(vm: SessionViewModel, onRegister: () -> Unit, onForgot: () -> Un
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onForgot).padding(6.dp))
         }
         XyonButton("Iniciar sesión", { vm.doLogin(email, pass, remember) }, Modifier.fillMaxWidth(), enabled = email.isNotBlank() && pass.length >= 8, loading = busy)
+    }
+}
+
+/** Second login step for accounts with two-step verification. */
+@Composable
+private fun MfaCodeStep(vm: SessionViewModel, busy: Boolean) {
+    var code by remember { mutableStateOf("") }
+    AuthShell(
+        "Un paso\nmás.", "Tu cuenta tiene verificación en dos pasos.",
+        "Código de verificación", "Abre tu app autenticadora o usa un código de recuperación", { vm.cancelMfa() },
+    ) {
+        XField(code, { code = it.take(20) }, "Código", keyboard = KeyboardType.Number, leading = Icons.Filled.Shield)
+        XyonButton("Verificar", { vm.verifyMfa(code) }, Modifier.fillMaxWidth(), enabled = code.trim().length >= 6, loading = busy)
     }
 }
 

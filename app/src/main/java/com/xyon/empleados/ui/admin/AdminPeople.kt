@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,7 +35,9 @@ class AdminUsersVm @Inject constructor(private val api: AdminApi, lf: LoaderFact
 
     fun create(r: CreateUserRequest) = act("Usuario creado", { api.createUser(r) }) { users.refresh() }
     fun update(id: String, r: UpdateUserRequest) = act("Usuario actualizado", { api.updateUser(id, r) }) { users.refresh() }
-    fun delete(id: String) = act("Usuario eliminado", { api.deleteUser(id) }) { users.refresh() }
+    fun delete(id: String) = act("Usuario dado de baja", { api.deleteUser(id) }) { users.refresh() }
+    fun revokeSessions(id: String) = act("Sesiones cerradas", { api.revokeSessions(id) })
+    fun resetMfa(id: String) = act("Verificación en dos pasos restablecida", { api.resetMfa(id) }) { users.refresh() }
     fun setActive(id: String, active: Boolean) =
         act(if (active) "Usuario reactivado" else "Usuario desactivado", { api.setActive(id, ActiveRequest(active)) }) { users.refresh() }
     fun resetPassword(email: String) = act("Enlace de restablecimiento enviado a $email", { api.forgot(ForgotRequest(email)) })
@@ -54,6 +57,8 @@ fun AdminUsersScreen(onBack: () -> Unit, snack: (String) -> Unit, onImport: () -
     var del by remember { mutableStateOf<User?>(null) }
     var reset by remember { mutableStateOf<User?>(null) }
     var toggle by remember { mutableStateOf<User?>(null) }
+    var revoke by remember { mutableStateOf<User?>(null) }
+    var mfaReset by remember { mutableStateOf<User?>(null) }
     var state by remember { mutableStateOf("") }
 
     AdminPage("Usuarios", "Alta, edición y roles", onBack, vm, snack,
@@ -83,15 +88,18 @@ fun AdminUsersScreen(onBack: () -> Unit, snack: (String) -> Unit, onImport: () -
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     StatusChip(ROLES.firstOrNull { it.first == u.role }?.second ?: u.role,
                                         when (u.role) { "ADMIN" -> Tone.Danger; "MANAGER" -> Tone.Warning; else -> Tone.Neutral })
-                                    if (!u.active) StatusChip("Inactivo", Tone.Danger)
+                                    if (!u.active) StatusChip(if (u.deletedAt != null) "Baja" else "Inactivo", Tone.Danger)
+                                    if (u.mfaEnabled) StatusChip("2FA", Tone.Success)
                                 }
                             }
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                             IconAction(Icons.Filled.LockReset, "Restablecer contraseña") { reset = u }
+                            IconAction(Icons.AutoMirrored.Filled.Logout, "Cerrar sus sesiones") { revoke = u }
+                            if (u.mfaEnabled) IconAction(Icons.Filled.PhonelinkLock, "Restablecer 2FA") { mfaReset = u }
                             IconAction(if (u.active) Icons.Filled.PersonOff else Icons.Filled.HowToReg, if (u.active) "Desactivar" else "Reactivar") { toggle = u }
                             IconAction(Icons.Filled.Edit, "Editar") { form = u }
-                            IconAction(Icons.Filled.Delete, "Eliminar", danger = true) { del = u }
+                            if (u.deletedAt == null) IconAction(Icons.Filled.Delete, "Dar de baja", danger = true) { del = u }
                         }
                     }
                 }
@@ -129,7 +137,9 @@ fun AdminUsersScreen(onBack: () -> Unit, snack: (String) -> Unit, onImport: () -
             XField(join, { join = it }, "Fecha de alta (AAAA-MM-DD)", error = if (!joinOk) "Formato AAAA-MM-DD" else null)
         }
     }
-    del?.let { ConfirmDialog("¿Eliminar a ${it.name}? Se borrarán también sus datos asociados.", onConfirm = { vm.delete(it.id) }, onDismiss = { del = null }) }
+    del?.let { ConfirmDialog("¿Dar de baja a ${it.name}? Perderá el acceso y se borrarán sus datos de contacto. Sus fichajes, nóminas y solicitudes se conservan durante el plazo legal.", "Dar de baja", onConfirm = { vm.delete(it.id) }, onDismiss = { del = null }) }
+    revoke?.let { ConfirmDialog("Se cerrará la sesión de ${it.name} en todos sus dispositivos.", "Cerrar sesiones", onConfirm = { vm.revokeSessions(it.id) }, onDismiss = { revoke = null }) }
+    mfaReset?.let { ConfirmDialog("¿Restablecer la verificación en dos pasos de ${it.name}? Úsalo solo si ha perdido el móvil y los códigos de recuperación.", "Restablecer", onConfirm = { vm.resetMfa(it.id) }, onDismiss = { mfaReset = null }) }
     toggle?.let { u ->
         ConfirmDialog(
             if (u.active) "¿Desactivar a ${u.name}? No podrá iniciar sesión y su sesión actual se cerrará. Sus datos se conservan."

@@ -14,7 +14,15 @@ interface Api {
     // Profile
     @GET("users/profile") suspend fun profile(): User
     @PUT("users/profile") suspend fun updateProfile(@Body b: UpdateProfileRequest): User
-    @POST("users/change-password") suspend fun changePassword(@Body b: ChangePasswordRequest): MessageResponse
+    /** Returns a new session: changing the password closes the other ones. */
+    @POST("users/change-password") suspend fun changePassword(@Body b: ChangePasswordRequest): AuthResponse
+    // Two-step verification and sessions
+    @POST("auth/mfa/verify") suspend fun mfaVerify(@Body b: MfaVerifyRequest): AuthResponse
+    @GET("auth/mfa/status") suspend fun mfaStatus(): MfaStatus
+    @POST("auth/mfa/setup") suspend fun mfaSetup(): MfaSetupResponse
+    @POST("auth/mfa/enable") suspend fun mfaEnable(@Body b: MfaCodeRequest): AuthResponse
+    @POST("auth/mfa/disable") suspend fun mfaDisable(@Body b: MfaDisableRequest): AuthResponse
+    @POST("auth/logout-all") suspend fun logoutAll(): MessageResponse
     @Multipart @POST("upload/avatar") suspend fun uploadAvatar(@Part file: MultipartBody.Part): UploadResult
 
     @Multipart @POST("upload/justification") suspend fun uploadJustification(@Part file: MultipartBody.Part): UploadResult

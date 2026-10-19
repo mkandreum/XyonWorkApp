@@ -16,6 +16,10 @@ data class User(
     val emergencyContact: String? = null,
     val joinDate: String? = null,
     val active: Boolean = true,
+    val deletedAt: String? = null,
+    val mfaEnabled: Boolean = false,
+    /** ADMIN without two-step verification: the server blocks admin routes until it is enabled. */
+    val mfaSetupRequired: Boolean = false,
 )
 
 @Serializable data class LoginRequest(val email: String, val password: String)
@@ -23,7 +27,17 @@ data class User(
     val name: String, val email: String, val password: String,
     val department: String? = null, val position: String? = null, val invitationCode: String,
 )
-@Serializable data class AuthResponse(val token: String, val user: User)
+/** Session (token + user) or, for accounts with two-step verification, the challenge for the code. */
+@Serializable data class AuthResponse(
+    val token: String? = null, val user: User? = null,
+    val mfaRequired: Boolean = false, val mfaToken: String? = null,
+    val recoveryCodes: List<String>? = null,
+)
+@Serializable data class MfaVerifyRequest(val mfaToken: String, val code: String)
+@Serializable data class MfaCodeRequest(val code: String)
+@Serializable data class MfaDisableRequest(val password: String, val code: String)
+@Serializable data class MfaStatus(val enabled: Boolean = false, val required: Boolean = false, val recoveryCodesLeft: Int = 0)
+@Serializable data class MfaSetupResponse(val secret: String, val otpauthUri: String)
 @Serializable data class EmailRequest(val email: String)
 @Serializable data class ResetPasswordRequest(val token: String, val email: String, val newPassword: String)
 @Serializable data class ChangePasswordRequest(val currentPassword: String, val newPassword: String)

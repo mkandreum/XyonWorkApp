@@ -94,17 +94,52 @@ class SessionViewModel @Inject constructor(
         }
     }
 
+    /** Pending second step of the login (authenticator code); null = no challenge. */
+    private val _mfaChallenge = MutableStateFlow<String?>(null)
+    val mfaChallenge: StateFlow<String?> = _mfaChallenge.asStateFlow()
+
     private fun accept(r: AuthResponse) = viewModelScope.launch {
-        store.saveToken(r.token)
-        cache.put("me", json.encodeToString(User.serializer(), r.user))
-        _auth.value = AuthState.LoggedIn(r.user)
+        val token = r.token ?: return@launch
+        val user = r.user ?: return@launch
+        store.saveToken(token)
+        cache.put("me", json.encodeToString(User.serializer(), user))
+        _mfaChallenge.value = null
+        _auth.value = AuthState.LoggedIn(user)
         reminders.refresh()
+    }
+
+    /** Stores a renewed session (password change, MFA on/off) without leaving the current screen. */
+    fun renewSession(r: AuthResponse) = viewModelScope.launch {
+        r.token?.let { store.saveToken(it) }
+        r.user?.let { u ->
+            cache.put("me", json.encodeToString(User.serializer(), u))
+            if (_auth.value is AuthState.LoggedIn) _auth.value = AuthState.LoggedIn(u)
+        }
     }
 
     private fun run(block: suspend () -> AuthResponse) = viewModelScope.launch {
         _busy.value = true
-        safeCall(block).onSuccess { accept(it) }.onFailure { _message.tryEmit(it.userMessage()) }
+        safeCall(block).onSuccess { r ->
+            if (r.mfaRequired && r.mfaToken != null) _mfaChallenge.value = r.mfaToken else accept(r)
+        }.onFailure { e ->
+            val (code, message) = e.apiError()
+            if (code == "MFA_EXPIRED") _mfaChallenge.value = null
+            _message.tryEmit(if (code == "MFA_INVALID") "Código incorrecto" else message)
+        }
         _busy.value = false
+    }
+
+    fun verifyMfa(code: String) {
+        val challenge = _mfaChallenge.value ?: return
+        run { api.mfaVerify(MfaVerifyRequest(challenge, code.trim())) }
+    }
+
+    fun cancelMfa() { _mfaChallenge.value = null }
+
+    fun logoutAll() = viewModelScope.launch {
+        safeCall { api.logoutAll() }
+            .onSuccess { signOut("Sesión cerrada en todos los dispositivos") }
+            .onFailure { _message.tryEmit(it.userMessage()) }
     }
     fun doLogin(email: String, pass: String, remember: Boolean = false) {
         viewModelScope.launch {
@@ -155,7 +190,8 @@ class SessionViewModel @Inject constructor(
 
     fun changePassword(cur: String, new: String) = viewModelScope.launch {
         safeCall { api.changePassword(ChangePasswordRequest(cur, new)) }
-            .onSuccess { _message.tryEmit("Contraseña cambiada") }
+            // The server closes the other sessions and returns a new one for this device
+            .onSuccess { renewSession(it); _message.tryEmit("Contraseña cambiada. Se ha cerrado la sesión en tus otros dispositivos.") }
             .onFailure { _message.tryEmit(it.userMessage()) }
     }
 

@@ -15,6 +15,8 @@ import javax.inject.Singleton
 interface AdminApi {
     // Users
     @GET("admin/users") suspend fun users(): List<User>
+    @POST("admin/users/{id}/revoke-sessions") suspend fun revokeSessions(@Path("id") id: String): MessageResponse
+    @POST("admin/users/{id}/mfa/reset") suspend fun resetMfa(@Path("id") id: String): MessageResponse
     @POST("admin/users") suspend fun createUser(@Body b: CreateUserRequest): User
     @PUT("admin/users/{id}") suspend fun updateUser(@Path("id") id: String, @Body b: UpdateUserRequest): User
     @DELETE("admin/users/{id}") suspend fun deleteUser(@Path("id") id: String): ResponseBody

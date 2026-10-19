@@ -148,6 +148,17 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
     val newsVm: NewsViewModel = hiltViewModel()
     val newsState by newsVm.news.state.collectAsState()
     val say: (String) -> Unit = { m -> scope.launch { snack.showSnackbar(m) } }
+    // Admins must enable two-step verification first (the server blocks everything else)
+    if (user.isAdmin && user.mfaSetupRequired) {
+        Box(Modifier.fillMaxSize().background(Xyon.colors.bg).statusBarsPadding()) {
+            Column {
+                Text("Protege tu cuenta de administración: activa la verificación en dos pasos para continuar.",
+                    color = Xyon.colors.ink, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp))
+                SecurityScreen(session, { session.signOut() }, say)
+            }
+        }
+        return
+    }
     val route by nav.currentBackStackEntryAsState()
     val current = route?.destination?.route
     val tabs = remember(user.role) { tabsFor(user) }
@@ -187,12 +198,13 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
                         NewsDetailScreen(newsState.data?.firstOrNull { it.id == id }) { nav.popBackStack() }
                     } }
                     composable("profile") { Scoped(this) {
-                        ProfileScreen(user, session, { push("notifications") }, { tab("payroll") }, { tab("calendar") }, { push("team") }, { if (tabs.any { it.route == "admin" }) tab("admin") else push("admin") }) { on ->
+                        ProfileScreen(user, session, { push("notifications") }, { tab("payroll") }, { tab("calendar") }, { push("team") }, { if (tabs.any { it.route == "admin" }) tab("admin") else push("admin") }, onSecurity = { push("security") }) { on ->
                             if (!on) session.setBiometric(false)
                             else if (canAuthenticate(act)) promptBiometric(act, "Activar desbloqueo", { session.setBiometric(true) }, { say(it) })
                             else say("Este dispositivo no tiene biometría o PIN configurado")
                         }
                     } }
+                    composable("security") { Scoped(this) { SecurityScreen(session, { nav.popBackStack() }, say) } }
                     composable("notifications") { Scoped(this) {
                         NotificationsScreen({ nav.popBackStack() }, user) { r ->
                             if (tabs.any { it.route == r }) tab(r) else push(r)
