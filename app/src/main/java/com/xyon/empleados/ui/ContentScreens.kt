@@ -131,6 +131,18 @@ fun PayrollScreen(onBack: (() -> Unit)?, vm: PayrollViewModel = hiltViewModel(),
             }
         }
     }
+    val prompt by vm.password.collectAsState()
+    prompt?.let { req ->
+        var pw by remember(req.payroll.id, req.save) { mutableStateOf("") }
+        AlertDialog({ if (!req.loading) vm.cancelPassword() }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("Confirma que eres tú") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Las nóminas están protegidas. Introduce la contraseña de tu cuenta para abrirlas durante unos minutos.", style = MaterialTheme.typography.bodyMedium)
+                XField(pw, { pw = it }, "Contraseña", password = true, error = req.error)
+            } },
+            confirmButton = { TextButton(enabled = pw.isNotEmpty() && !req.loading, onClick = { vm.submitPassword(pw) }) { Text(if (req.loading) "Comprobando…" else "Abrir") } },
+            dismissButton = { TextButton(enabled = !req.loading, onClick = { vm.cancelPassword() }) { Text("Cancelar") } })
+    }
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("Nóminas", "Ábrelas o guárdalas en Descargas", onBack)
         LoadScreen(st, { vm.items.refresh() }) { list ->

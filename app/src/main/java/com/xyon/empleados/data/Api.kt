@@ -32,6 +32,9 @@ interface Api {
     @GET("payrolls") suspend fun payrolls(): List<Payroll>
     @GET("payrolls/{id}/download") suspend fun payrollDownload(@Path("id") id: String): DownloadInfo
     @Streaming @GET suspend fun download(@Url url: String): ResponseBody
+    @POST("payrolls/unlock") suspend fun payrollUnlock(@Body b: PayrollUnlockRequest): PayrollUnlockResponse
+    /** Payroll files need the unlock token from [payrollUnlock] (server answers 403 PAYROLL_LOCKED otherwise). */
+    @Streaming @GET suspend fun downloadPayrollFile(@Url url: String, @Header("X-Payroll-Unlock") unlock: String): ResponseBody
 
     // Vacations / absences
     @GET("vacations") suspend fun vacations(): List<VacationRequest>

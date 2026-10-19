@@ -88,6 +88,14 @@ fun Throwable.userMessage(): String = when (this) {
     else -> message ?: "Error inesperado"
 }
 
+/** Server error `code` (e.g. WRONG_PASSWORD) and readable message, reading the error body only once. */
+fun Throwable.apiError(): Pair<String?, String> {
+    if (this !is HttpException) return null to userMessage()
+    val raw = runCatching { response()?.errorBody()?.string() }.getOrNull()
+    val parsed = raw?.let { runCatching { AppJson.decodeFromString<MessageResponse>(it) }.getOrNull() }
+    return parsed?.code to (parsed?.error ?: userMessage())
+}
+
 const val ACCOUNT_DISABLED_MSG = "Tu cuenta está desactivada. Contacta con administración."
 
 /** Multipart file part whose filename carries an extension derived from the mime type. */

@@ -296,7 +296,43 @@ class PayrollViewModel @Inject constructor(private val api: Api, lf: LoaderFacto
     private val _busy = MutableStateFlow<String?>(null)
     val busy = _busy.asStateFlow()
 
-    fun open(p: Payroll, save: Boolean = false) = viewModelScope.launch {
+    /** Payslip waiting for the account password; null = no dialog. */
+    data class PasswordPrompt(val payroll: Payroll, val save: Boolean, val error: String? = null, val loading: Boolean = false)
+    private val _password = MutableStateFlow<PasswordPrompt?>(null)
+    val password = _password.asStateFlow()
+
+    // Unlock issued by the server (POST payrolls/unlock). Memory only: never persisted.
+    private var unlock: String? = null
+    private var unlockUntil = 0L
+
+    fun open(p: Payroll, save: Boolean = false) {
+        val token = unlock?.takeIf { System.currentTimeMillis() < unlockUntil }
+        if (token == null) _password.value = PasswordPrompt(p, save) else download(p, save, token)
+    }
+
+    fun cancelPassword() { _password.value = null }
+
+    fun submitPassword(pw: String) {
+        val prompt = _password.value ?: return
+        if (prompt.loading || pw.isEmpty()) return
+        _password.value = prompt.copy(loading = true, error = null)
+        viewModelScope.launch {
+            safeCall { api.payrollUnlock(PayrollUnlockRequest(pw)) }
+                .onSuccess { r ->
+                    unlock = r.unlockToken
+                    // Small margin so a download never leaves with a token about to expire
+                    unlockUntil = System.currentTimeMillis() + (r.expiresIn - 15).coerceAtLeast(0) * 1000L
+                    _password.value = null
+                    download(prompt.payroll, prompt.save, r.unlockToken)
+                }
+                .onFailure { e ->
+                    val (code, message) = e.apiError()
+                    _password.value = prompt.copy(loading = false, error = if (code == "WRONG_PASSWORD") "Contraseña incorrecta" else message)
+                }
+        }
+    }
+
+    private fun download(p: Payroll, save: Boolean, token: String) = viewModelScope.launch {
         _busy.value = p.id
         safeCall {
             val info = api.payrollDownload(p.id)
@@ -307,9 +343,16 @@ class PayrollViewModel @Inject constructor(private val api: Api, lf: LoaderFacto
             val apiHost = android.net.Uri.parse(base).host
             val uri = android.net.Uri.parse(full)
             require(uri.scheme == "https" && uri.host == apiHost) { "URL no segura" }
-            val bytes = api.download(full).bytes()
+            val bytes = api.downloadPayrollFile(full, token).bytes()
             PayslipFile(bytes, info.filename ?: "nomina_${p.month}_${p.year}.pdf", save)
-        }.onSuccess { _file.tryEmit(it) }.onFailure { _msg.tryEmit(it.userMessage()) }
+        }.onSuccess { _file.tryEmit(it) }.onFailure { e ->
+            val (code, message) = e.apiError()
+            if (code == "PAYROLL_LOCKED") {
+                // Unlock expired on the server: ask for the password again
+                unlock = null
+                _password.value = PasswordPrompt(p, save)
+            } else _msg.tryEmit(message)
+        }
         _busy.value = null
     }
 }

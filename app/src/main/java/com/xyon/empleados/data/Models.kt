@@ -40,6 +40,9 @@ data class Payroll(
     val user: User? = null,
 )
 @Serializable data class DownloadInfo(val pdfUrl: String? = null, val filename: String? = null)
+/** POST payrolls/unlock: the account password unlocks payroll files for a few minutes. */
+@Serializable data class PayrollUnlockRequest(val password: String)
+@Serializable data class PayrollUnlockResponse(val unlockToken: String, val expiresIn: Int = 300)
 
 @Serializable
 data class VacationRequest(
