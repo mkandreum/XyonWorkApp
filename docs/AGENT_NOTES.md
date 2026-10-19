@@ -79,6 +79,10 @@ ReminderAlarmReceiver        ← notificación (salvo que ya haya fichado)
 - Versión de publicación: **versionCode 7 / versionName 7.0**.
 - AAB firmado con `keystore/xyon-release.jks` (alias `xyon`), copia local de la firma
   original de `XyonEmpleados_Publicar`. `keystore.properties` no se versiona.
+- AAB generado: `Escritorio\XyonEmpleados_Publicar\XyonEmpleados-7.0-release.aab`
+  (6.385.952 bytes, SHA-256 `4D60A4BB7F4C58E3EA8B369B7E17A0B5643435138E5B9F8A91EDDCC1E41C3602`).
+- Firma verificada con `jarsigner` (`jar verified`); huella SHA-256 del certificado
+  `7A:E7:30:CE:F9:EE:3E:AB:12:52:78:2C:87:B2:9B:E8:C6:81:B1:97:FB:16:D9:98:66:A3:58:74:4B:BF:34:88`.
 
 ### Limitaciones / siguiente fase
 - Sin Firebase: los avisos son locales. Si el fabricante mata el proceso o el usuario
