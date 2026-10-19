@@ -120,10 +120,19 @@ fun AppRoot(vm: SessionViewModel = hiltViewModel()) {
 @Composable
 private fun AuthGraph(vm: SessionViewModel) {
     val nav = rememberNavController()
-    NavHost(nav, "login", enterTransition = { slideInHorizontally(spring(stiffness = Spring.StiffnessMediumLow)) { it / 3 } + fadeIn() },
+    // No company chosen yet: start at "Conecta con tu empresa" (it also offers the build's default
+    // server, so installs from before multi-company keep working with one tap).
+    val start = remember { if (com.xyon.empleados.data.ServerConfig.isConfigured) "login" else "connect" }
+    NavHost(nav, start, enterTransition = { slideInHorizontally(spring(stiffness = Spring.StiffnessMediumLow)) { it / 3 } + fadeIn() },
         exitTransition = { fadeOut() }, popEnterTransition = { fadeIn() },
         popExitTransition = { slideOutHorizontally { it / 3 } + fadeOut() }) {
-        composable("login") { LoginScreen(vm, { nav.navigate("register") }, { nav.navigate("forgot") }) }
+        composable("login") { LoginScreen(vm, { nav.navigate("register") }, { nav.navigate("forgot") }, { nav.navigate("connect") }) }
+        composable("connect") {
+            ConnectScreen(
+                onDone = { nav.navigate("login") { popUpTo(nav.graph.id) { inclusive = true } } },
+                onBack = if (nav.previousBackStackEntry != null) ({ nav.popBackStack() }) else null,
+            )
+        }
         composable("register") { RegisterScreen(vm) { nav.popBackStack() } }
         composable("forgot") { ForgotScreen(vm, { nav.popBackStack() }, { nav.navigate("reset") }) }
         composable("reset") { ResetScreen(vm, { nav.popBackStack() }) { nav.navigate("login") { popUpTo("login") { inclusive = true } } } }

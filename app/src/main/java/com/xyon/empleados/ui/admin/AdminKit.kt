@@ -175,9 +175,7 @@ fun readPicked(ctx: Context, uri: Uri): Pair<ByteArray, String>? = runCatching {
     bytes to mime
 }.getOrNull()
 
-fun absUrl(u: String?): String? = u?.let {
-    if (it.startsWith("http")) it else BuildConfig.API_BASE_URL.removeSuffix("api/") + it.removePrefix("/")
-}?.takeIf { it.startsWith("https://") }
+fun absUrl(u: String?): String? = com.xyon.empleados.data.ServerConfig.absolute(u)
 
 val EMAIL_RE = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
 val TIME_RE = Regex("^([01]?[0-9]|2[0-3]):[0-5][0-9]$")

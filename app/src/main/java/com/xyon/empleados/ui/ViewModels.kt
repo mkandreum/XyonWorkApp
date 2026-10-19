@@ -337,12 +337,10 @@ class PayrollViewModel @Inject constructor(private val api: Api, lf: LoaderFacto
         safeCall {
             val info = api.payrollDownload(p.id)
             val url = info.pdfUrl ?: error("Sin archivo")
-            val base = com.xyon.empleados.BuildConfig.API_BASE_URL
-            val full = if (url.startsWith("http")) url else base.removeSuffix("api/") + url.removePrefix("/")
-            // Only download from our own API host over HTTPS
-            val apiHost = android.net.Uri.parse(base).host
+            val full = ServerConfig.absolute(url) ?: error("URL no segura")
+            // Only download from the current company server over HTTPS
             val uri = android.net.Uri.parse(full)
-            require(uri.scheme == "https" && uri.host == apiHost) { "URL no segura" }
+            require(uri.scheme == "https" && uri.host == ServerConfig.host) { "URL no segura" }
             val bytes = api.downloadPayrollFile(full, token).bytes()
             PayslipFile(bytes, info.filename ?: "nomina_${p.month}_${p.year}.pdf", save)
         }.onSuccess { _file.tryEmit(it) }.onFailure { e ->

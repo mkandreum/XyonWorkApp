@@ -19,8 +19,10 @@ appcompat = "1.7.0"
 coil = "2.7.0"
 work = "2.9.1"
 junit = "4.13.2"
+codeScanner = "16.1.0"
 
 [libraries]
+play-code-scanner = { module = "com.google.android.gms:play-services-code-scanner", version.ref = "codeScanner" }
 androidx-work = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }

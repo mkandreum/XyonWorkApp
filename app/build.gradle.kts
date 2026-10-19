@@ -83,6 +83,8 @@ dependencies {
     implementation(libs.biometric)
     implementation(libs.coil)
     implementation(libs.androidx.work)
+    // QR "Conecta con tu empresa": escáner de Google Play services, sin permiso de cámara
+    implementation(libs.play.code.scanner)
     debugImplementation(libs.androidx.ui.tooling)
 
     testImplementation(libs.junit)

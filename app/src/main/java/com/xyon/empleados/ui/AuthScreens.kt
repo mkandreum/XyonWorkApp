@@ -27,6 +27,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
 import com.xyon.empleados.data.RegisterRequest
+import com.xyon.empleados.data.ServerConfig
+import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.xyon.empleados.ui.theme.*
 
 /** Same rule as the backend: 12+ chars with upper, lower, digit and any symbol. */
@@ -108,8 +111,25 @@ private fun FooterLink(prefix: String, action: String, onClick: () -> Unit) {
     }
 }
 
+/** "Acme · acme.xyonwork.com — Cambiar": which company this login goes to. */
 @Composable
-fun LoginScreen(vm: SessionViewModel, onRegister: () -> Unit, onForgot: () -> Unit) {
+private fun CompanyRow(onChange: () -> Unit) {
+    val x = Xyon.colors
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(x.card).clickable(onClick = onChange).padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.Business, null, tint = x.inkSoft)
+        Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+            Text(ServerConfig.companyName ?: "Empresa", color = x.ink, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(ServerConfig.host, color = x.inkSoft, fontSize = 13.sp, maxLines = 1)
+        }
+        Text("Cambiar", color = x.blue, fontWeight = FontWeight.ExtraBold)
+    }
+}
+
+@Composable
+fun LoginScreen(vm: SessionViewModel, onRegister: () -> Unit, onForgot: () -> Unit, onChangeCompany: () -> Unit = {}) {
     val x = Xyon.colors
     val remembered by vm.rememberedEmail.collectAsState()
     var email by remember { mutableStateOf("") }
@@ -122,6 +142,7 @@ fun LoginScreen(vm: SessionViewModel, onRegister: () -> Unit, onForgot: () -> Un
         "Hola de nuevo", "Inicia sesión en tu portal del empleado", null,
         footer = { FooterLink("¿No tienes cuenta? ", "Regístrate", onRegister) },
     ) {
+        CompanyRow(onChangeCompany)
         XField(email, { email = it }, "Correo electrónico", keyboard = KeyboardType.Email, leading = Icons.Filled.Email)
         XField(pass, { pass = it }, "Contraseña", password = true, leading = Icons.Filled.Lock)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -231,3 +252,63 @@ fun LogoTile(size: androidx.compose.ui.unit.Dp) {
         androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.xyon.empleados.R.drawable.ic_launcher_fg), "Xyon", Modifier.matchParentSize().scale(1.45f))
     }
 }
+
+/**
+ * "Conecta con tu empresa": code (acme), full address or QR. The server is checked and the company
+ * it reports is shown for confirmation before any credentials are sent (ADR-003, ADR-015).
+ */
+@Composable
+fun ConnectScreen(onDone: () -> Unit, onBack: (() -> Unit)?, vm: ConnectViewModel = hiltViewModel()) {
+    val x = Xyon.colors
+    val ctx = LocalContext.current
+    var input by remember { mutableStateOf("") }
+    val busy by vm.busy.collectAsState()
+    val error by vm.error.collectAsState()
+    val found by vm.found.collectAsState()
+
+    AuthShell(
+        "Conecta con\ntu empresa.", "Usa el código que te ha dado tu empresa, su dirección o escanea su QR.",
+        "¿Cuál es tu empresa?", "Ejemplo: acme o acme.xyonwork.com", onBack,
+    ) {
+        XField(input, { input = it; vm.clearError() }, "Empresa", keyboard = KeyboardType.Uri, leading = Icons.Filled.Business, error = error)
+        XyonButton("Continuar", { vm.check(input) }, Modifier.fillMaxWidth(), enabled = input.isNotBlank(), loading = busy)
+        XyonButton("Escanear QR", {
+            com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(
+                ctx,
+                com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder()
+                    .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE).build(),
+            ).startScan()
+                .addOnSuccessListener { code -> code.rawValue?.let { input = it; vm.check(it) } }
+        }, Modifier.fillMaxWidth(), style = XyonButtonStyle.Light, icon = Icons.Filled.QrCodeScanner, showArrow = false)
+        if (!ServerConfig.isConfigured) {
+            Text("Continuar con ${ServerConfig.host}", color = x.blue, fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(8.dp)).clickable { input = ServerConfig.host; vm.check(ServerConfig.host) }.padding(8.dp))
+        }
+    }
+
+    found?.let { f ->
+        AlertDialog({ vm.dismiss() }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("¿Es tu empresa?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (f.logoUrl != null) {
+                            AsyncImage(f.logoUrl, null, Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(Color.White))
+                            Spacer(Modifier.width(12.dp))
+                        }
+                        Column {
+                            Text(f.name ?: f.host, fontWeight = FontWeight.Black, fontSize = 18.sp, color = x.ink)
+                            Text(f.host, color = x.inkSoft)
+                        }
+                    }
+                    if (f.ownDomain) {
+                        Text("Esta dirección no es de xyonwork.com. Continúa solo si te la ha dado tu empresa: tus credenciales se enviarán a ${f.host}.",
+                            color = x.ink, fontSize = 14.sp)
+                    }
+                }
+            },
+            confirmButton = { TextButton({ vm.confirm(onDone) }) { Text("Sí, conectar") } },
+            dismissButton = { TextButton({ vm.dismiss() }) { Text("No") } })
+    }
+}
+

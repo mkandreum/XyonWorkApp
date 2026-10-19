@@ -38,15 +38,26 @@ object NetworkModule {
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .addInterceptor { chain ->
-                val req = chain.request()
+                var req = chain.request()
+                // Retrofit is built once with the build's base URL; requests go to the company server
+                // chosen on this device (code, URL or QR), see ServerConfig.
+                val placeholder = BuildConfig.API_BASE_URL
+                val current = ServerConfig.baseUrl
+                val url = req.url.toString()
+                // Requests to a candidate server (company check) go exactly where they say, without token
+                val direct = req.header(DIRECT_HEADER) != null
+                if (direct) req = req.newBuilder().removeHeader(DIRECT_HEADER).build()
+                else if (current != placeholder && url.startsWith(placeholder)) {
+                    req = req.newBuilder().url(current + url.removePrefix(placeholder)).build()
+                }
                 val b = req.newBuilder()
-                // Only attach the token to our own API host
-                if (req.url.host == BuildConfig.API_BASE_URL.toHttpUrl().host) {
+                // Only attach the token to the current company server
+                if (!direct && req.url.host == current.toHttpUrl().host) {
                     session.token?.let { b.header("Authorization", "Bearer $it") }
                 }
                 val resp = chain.proceed(b.build())
                 val isAuthCall = req.url.encodedPath.contains("/auth/")
-                if ((resp.code == 401 || resp.code == 403) && !isAuthCall && session.token != null) {
+                if ((resp.code == 401 || resp.code == 403) && !isAuthCall && !direct && session.token != null) {
                     val body = runCatching { resp.peekBody(4096).string() }.getOrDefault("")
                     when {
                         body.contains("ACCOUNT_DISABLED") -> session.accountDisabled.tryEmit(Unit)
@@ -95,6 +106,9 @@ fun Throwable.apiError(): Pair<String?, String> {
     val parsed = raw?.let { runCatching { AppJson.decodeFromString<MessageResponse>(it) }.getOrNull() }
     return parsed?.code to (parsed?.error ?: userMessage())
 }
+
+/** Internal marker: send the request as-is (no server rewrite, no token). Never leaves the device. */
+const val DIRECT_HEADER = "X-Xyon-Direct"
 
 const val ACCOUNT_DISABLED_MSG = "Tu cuenta está desactivada. Contacta con administración."
 

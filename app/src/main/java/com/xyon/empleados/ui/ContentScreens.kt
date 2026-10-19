@@ -47,9 +47,7 @@ fun Modifier.sharedKey(key: String): Modifier {
     return if (s != null && a != null) with(s) { this@sharedKey.sharedBounds(rememberSharedContentState(key), a, resizeMode = SharedTransitionScope.ResizeMode.ScaleToBounds()) } else this
 }
 
-private fun imageUrl(u: String?): String? = u?.let {
-    if (it.startsWith("http")) it else BuildConfig.API_BASE_URL.removeSuffix("api/") + it.removePrefix("/")
-}?.takeIf { it.startsWith("https://") }
+private fun imageUrl(u: String?): String? = com.xyon.empleados.data.ServerConfig.absolute(u)
 
 @Composable
 fun NewsScreen(vm: NewsViewModel, onOpen: (NewsItem) -> Unit) {
