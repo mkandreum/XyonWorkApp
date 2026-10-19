@@ -32,7 +32,7 @@ class RoleViewModel @Inject constructor(private val api: Api, private val adminA
         viewModelScope.launch {
             val req = async {
                 safeCall {
-                    if (user.isAdmin) adminApi.stats().pendingRequests
+                    if (user.isAdmin) adminApi.stats().let { it.pendingRequests + it.pendingAssignments }
                     else api.teamVacations().count { it.status == "PENDING_MANAGER" || it.status == "PENDING" }
                 }.getOrNull()
             }

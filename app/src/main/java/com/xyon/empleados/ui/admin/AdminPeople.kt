@@ -38,6 +38,8 @@ class AdminUsersVm @Inject constructor(private val api: AdminApi, lf: LoaderFact
     fun delete(id: String) = act("Usuario dado de baja", { api.deleteUser(id) }) { users.refresh() }
     fun revokeSessions(id: String) = act("Sesiones cerradas", { api.revokeSessions(id) })
     fun resetMfa(id: String) = act("Verificación en dos pasos restablecida", { api.resetMfa(id) }) { users.refresh() }
+    fun assign(id: String, department: String, position: String, role: String) =
+        act("Alta completada", { api.assignUser(id, AssignUserRequest(department, position, role)) }) { users.refresh() }
     fun setActive(id: String, active: Boolean) =
         act(if (active) "Usuario reactivado" else "Usuario desactivado", { api.setActive(id, ActiveRequest(active)) }) { users.refresh() }
     fun resetPassword(email: String) = act("Enlace de restablecimiento enviado a $email", { api.forgot(ForgotRequest(email)) })
@@ -59,6 +61,7 @@ fun AdminUsersScreen(onBack: () -> Unit, snack: (String) -> Unit, onImport: () -
     var toggle by remember { mutableStateOf<User?>(null) }
     var revoke by remember { mutableStateOf<User?>(null) }
     var mfaReset by remember { mutableStateOf<User?>(null) }
+    var assigning by remember { mutableStateOf<User?>(null) }
     var state by remember { mutableStateOf("") }
 
     AdminPage("Usuarios", "Alta, edición y roles", onBack, vm, snack,
@@ -90,10 +93,12 @@ fun AdminUsersScreen(onBack: () -> Unit, snack: (String) -> Unit, onImport: () -
                                         when (u.role) { "ADMIN" -> Tone.Danger; "MANAGER" -> Tone.Warning; else -> Tone.Neutral })
                                     if (!u.active) StatusChip(if (u.deletedAt != null) "Baja" else "Inactivo", Tone.Danger)
                                     if (u.mfaEnabled) StatusChip("2FA", Tone.Success)
+                                    if (u.pendingAssignment) StatusChip("Por asignar", Tone.Warning)
                                 }
                             }
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            if (u.pendingAssignment) IconAction(Icons.Filled.AssignmentInd, "Asignar departamento") { assigning = u }
                             IconAction(Icons.Filled.LockReset, "Restablecer contraseña") { reset = u }
                             IconAction(Icons.AutoMirrored.Filled.Logout, "Cerrar sus sesiones") { revoke = u }
                             if (u.mfaEnabled) IconAction(Icons.Filled.PhonelinkLock, "Restablecer 2FA") { mfaReset = u }
@@ -138,6 +143,19 @@ fun AdminUsersScreen(onBack: () -> Unit, snack: (String) -> Unit, onImport: () -
         }
     }
     del?.let { ConfirmDialog("¿Dar de baja a ${it.name}? Perderá el acceso y se borrarán sus datos de contacto. Sus fichajes, nóminas y solicitudes se conservan durante el plazo legal.", "Dar de baja", onConfirm = { vm.delete(it.id) }, onDismiss = { del = null }) }
+    assigning?.let { u ->
+        var d by remember(u.id) { mutableStateOf(deps.firstOrNull { it != "Sin asignar" } ?: "") }
+        var pos by remember(u.id) { mutableStateOf("") }
+        var r by remember(u.id) { mutableStateOf("EMPLOYEE") }
+        FormDialog("Completar alta de ${u.name}", enabled = d.isNotBlank() && pos.isNotBlank(), onDismiss = { assigning = null }, onConfirm = {
+            vm.assign(u.id, d.trim(), pos.trim(), r); assigning = null
+        }) {
+            XField(d, { d = it }, "Departamento")
+            if (deps.isNotEmpty()) ChipsRow(deps.filter { it != "Sin asignar" }.map { it to it }, d, { d = it })
+            XField(pos, { pos = it }, "Puesto")
+            Dropdown("Rol", r, listOf("EMPLOYEE" to "Empleado", "MANAGER" to "Responsable del departamento"), { r = it })
+        }
+    }
     revoke?.let { ConfirmDialog("Se cerrará la sesión de ${it.name} en todos sus dispositivos.", "Cerrar sesiones", onConfirm = { vm.revokeSessions(it.id) }, onDismiss = { revoke = null }) }
     mfaReset?.let { ConfirmDialog("¿Restablecer la verificación en dos pasos de ${it.name}? Úsalo solo si ha perdido el móvil y los códigos de recuperación.", "Restablecer", onConfirm = { vm.resetMfa(it.id) }, onDismiss = { mfaReset = null }) }
     toggle?.let { u ->

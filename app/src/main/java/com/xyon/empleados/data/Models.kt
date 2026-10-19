@@ -18,6 +18,8 @@ data class User(
     val active: Boolean = true,
     val deletedAt: String? = null,
     val mfaEnabled: Boolean = false,
+    /** Self sign-up waiting for HR to assign department, job title and role. */
+    val pendingAssignment: Boolean = false,
     /** ADMIN without two-step verification: the server blocks admin routes until it is enabled. */
     val mfaSetupRequired: Boolean = false,
 )
@@ -35,6 +37,7 @@ data class User(
 )
 @Serializable data class MfaVerifyRequest(val mfaToken: String, val code: String)
 @Serializable data class MfaCodeRequest(val code: String)
+@Serializable data class AssignUserRequest(val department: String, val position: String, val role: String)
 @Serializable data class MfaDisableRequest(val password: String, val code: String)
 @Serializable data class MfaStatus(val enabled: Boolean = false, val required: Boolean = false, val recoveryCodesLeft: Int = 0)
 @Serializable data class MfaSetupResponse(val secret: String, val otpauthUri: String)
@@ -148,7 +151,7 @@ data class DepartmentBenefits(
 @Serializable
 data class AdminStats(
     // Same keys as GET /admin/stats (statsController.getAdminStats)
-    val totalEmployees: Int = 0, val pendingRequests: Int = 0, val approvedThisMonth: Int = 0,
+    val totalEmployees: Int = 0, val pendingRequests: Int = 0, val pendingAssignments: Int = 0, val approvedThisMonth: Int = 0,
     val payrollsProcessed: Int = 0,
 )
 @Serializable

@@ -177,25 +177,22 @@ fun RegisterScreen(vm: SessionViewModel, onBack: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
-    var dept by remember { mutableStateOf("") }
-    var pos by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     val busy by vm.busy.collectAsState()
     val strong = isStrongPassword(pass)
     AuthShell(
-        "Bienvenido\nal equipo.", "Crea tu cuenta con el código que te ha dado tu empresa.",
+        "Bienvenido\nal equipo.", "Crea tu cuenta con el código que te ha dado tu empresa. RRHH te asignará departamento y puesto.",
         "Crear cuenta", "Únete al portal del empleado", onBack,
         footer = { FooterLink("¿Ya tienes cuenta? ", "Inicia sesión", onBack) },
     ) {
         XField(code, { code = it.uppercase() }, "Código de invitación", leading = Icons.Filled.VpnKey)
         XField(name, { name = it }, "Nombre completo", leading = Icons.Filled.Person)
         XField(email, { email = it }, "Correo electrónico", keyboard = KeyboardType.Email, leading = Icons.Filled.Email)
-        XField(dept, { dept = it }, "Departamento (opcional)", leading = Icons.Filled.Apartment)
-        XField(pos, { pos = it }, "Cargo (opcional)", leading = Icons.Filled.Work)
         XField(pass, { pass = it }, "Contraseña", password = true, leading = Icons.Filled.Lock,
             error = if (pass.isNotEmpty() && !strong) PASSWORD_HINT else null)
         XyonButton("Crear cuenta", {
-            vm.doRegister(RegisterRequest(name.trim(), email.trim(), pass, dept.ifBlank { null }, pos.ifBlank { null }, code.trim()))
+            // Department and job title are assigned by HR after sign-up
+            vm.doRegister(RegisterRequest(name.trim(), email.trim(), pass, invitationCode = code.trim()))
         }, Modifier.fillMaxWidth(), enabled = strong && name.length >= 2 && email.isNotBlank() && code.isNotBlank(), loading = busy)
     }
 }
