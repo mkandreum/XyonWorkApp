@@ -161,7 +161,10 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
     }
     val route by nav.currentBackStackEntryAsState()
     val current = route?.destination?.route
-    val tabs = remember(user.role) { tabsFor(user) }
+    val planVm: PlanViewModel = hiltViewModel(act)
+    val features by planVm.features.collectAsState()
+    LaunchedEffect(user.id) { planVm.load() }
+    val tabs = remember(user.role, features) { tabsFor(user).filter { it.route != "payroll" || features.allows("payroll") } }
     val start = tabs.first().route
     val showBar = tabs.any { it.route == current }
 

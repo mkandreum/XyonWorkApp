@@ -29,6 +29,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import com.xyon.empleados.data.AdminStats
+import com.xyon.empleados.ui.allows
 import com.xyon.empleados.data.LoaderFactory
 import com.xyon.empleados.data.User
 import com.xyon.empleados.data.admin.AdminApi
@@ -45,6 +46,12 @@ class AdminHubVm @Inject constructor(private val api: AdminApi, lf: LoaderFactor
 private data class Tool(
     val route: String, val label: String, val hint: String, val icon: ImageVector, val color: Color,
     val adminOnly: Boolean = true, val badge: ((RolePending) -> Int?)? = null,
+)
+
+/** Admin tools that belong to a plan module (see PlanViewModel). */
+private val TOOL_FEATURE = mapOf(
+    "adjust" to "adjustments", "late" to "lateNotices", "assign" to "shifts", "shifts" to "shifts",
+    "payroll" to "payroll", "layouts" to "widgets",
 )
 private data class Section(val title: String, val tools: List<Tool>)
 
@@ -87,6 +94,9 @@ fun AdminHubScreen(
     val admin = user.role == "ADMIN"
     val st by vm.stats.state.collectAsState()
     val pending by roleVm.pending.collectAsState()
+    val planVm: com.xyon.empleados.ui.PlanViewModel = hiltViewModel(androidx.compose.ui.platform.LocalContext.current as androidx.fragment.app.FragmentActivity)
+    val features by planVm.features.collectAsState()
+    LaunchedEffect(Unit) { planVm.load() }
     LaunchedEffect(user.id) { roleVm.load(user) }
     if (admin) SecureScreen()
     AdminPage(if (admin) "Administración" else "Mi equipo", if (admin) "Toda la empresa" else user.department.ifBlank { null }, onBack, vm, snack) {
@@ -115,7 +125,7 @@ fun AdminHubScreen(
             }
             var idx = 2
             SECTIONS.forEach { section ->
-                val tools = section.tools.filter { admin || !it.adminOnly }
+                val tools = section.tools.filter { (admin || !it.adminOnly) && features.allows(TOOL_FEATURE[it.route]) }
                 if (tools.isEmpty()) return@forEach
                 item(key = "h_${section.title}") { SectionHeader(section.title) }
                 tools.chunked(2).forEach { pair ->

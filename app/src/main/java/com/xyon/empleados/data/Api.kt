@@ -13,6 +13,7 @@ interface Api {
 
     // Profile
     @GET("users/profile") suspend fun profile(): User
+    @GET("plan") suspend fun plan(): PlanInfo
     @PUT("users/profile") suspend fun updateProfile(@Body b: UpdateProfileRequest): User
     /** Returns a new session: changing the password closes the other ones. */
     @POST("users/change-password") suspend fun changePassword(@Body b: ChangePasswordRequest): AuthResponse

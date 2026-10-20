@@ -205,3 +205,12 @@ data class OkResponse(val ok: Boolean = true)
     val period: ReportPeriod = ReportPeriod(), val generatedAt: String = "", val fileBase: String = "informe", val reports: List<UserReport> = emptyList(),
 )
 
+
+/** GET /api/plan: modules and limits of the contracted plan (basico | profesional | empresa). */
+@Serializable data class PlanInfo(
+    val code: String = "profesional",
+    val label: String = "",
+    val maxUsers: Int = 0,
+    val features: List<String> = emptyList(),
+    val usedUsers: Int = 0,
+)
