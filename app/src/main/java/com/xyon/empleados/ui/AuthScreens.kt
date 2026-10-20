@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -199,15 +200,45 @@ fun RegisterScreen(vm: SessionViewModel, onBack: () -> Unit) {
 
 @Composable
 fun ForgotScreen(vm: SessionViewModel, onBack: () -> Unit, onHaveToken: () -> Unit) {
-    var email by remember { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
+    // Correo al que ya se pidió el enlace: pasa a "Revisa tu correo" en vez de pedir el código
+    var sentTo by rememberSaveable { mutableStateOf<String?>(null) }
     val busy by vm.busy.collectAsState()
-    AuthShell(
-        "¿Sin\ncontraseña?", "Te enviamos un enlace para crear una nueva en menos de un minuto.",
-        "Recuperar acceso", "Escribe el email de tu cuenta.", onBack,
-        footer = { FooterLink("¿Ya tienes el enlace? ", "Introducir código", onHaveToken) },
-    ) {
-        XField(email, { email = it }, "Correo electrónico", keyboard = KeyboardType.Email, leading = Icons.Filled.Email)
-        XyonButton("Enviar enlace", { vm.forgot(email) { onHaveToken() } }, Modifier.fillMaxWidth(), enabled = email.contains("@"), loading = busy)
+    val ctx = LocalContext.current
+    val x = Xyon.colors
+    val sent = sentTo
+    if (sent == null) {
+        AuthShell(
+            "¿Sin\ncontraseña?", "Te enviamos un enlace para crear una nueva en menos de un minuto.",
+            "Recuperar acceso", "Escribe el email de tu cuenta.", onBack,
+            footer = { FooterLink("¿Ya tienes el enlace? ", "Introducir código", onHaveToken) },
+        ) {
+            XField(email, { email = it }, "Correo electrónico", keyboard = KeyboardType.Email, leading = Icons.Filled.Email)
+            XyonButton("Enviar enlace", { vm.forgot(email) { sentTo = email.trim() } }, Modifier.fillMaxWidth(), enabled = email.contains("@"), loading = busy)
+        }
+    } else {
+        AuthShell(
+            "Revisa\ntu correo.", "Si $sent tiene cuenta, te llegará un enlace en unos minutos.",
+            "Correo enviado", "Abre el enlace del mensaje desde este móvil para elegir tu nueva contraseña.", onBack,
+            footer = { FooterLink("¿Prefieres pegar el código? ", "Introducir código", onHaveToken) },
+        ) {
+            Icon(Icons.Filled.Email, null, tint = x.blue, modifier = Modifier.size(44.dp).align(Alignment.CenterHorizontally))
+            Text(
+                "Mira también en Spam o Promociones. El enlace caduca en 1 hora. Si ya pediste uno hace poco, usa ese: no enviamos otro hasta pasados 10 minutos.",
+                color = x.inkSoft, textAlign = TextAlign.Center,
+            )
+            XyonButton("Abrir correo", {
+                val intent = android.content.Intent.makeMainSelectorActivity(android.content.Intent.ACTION_MAIN, android.content.Intent.CATEGORY_APP_EMAIL)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                // Sin app de correo instalada no pasa nada: el usuario abre la suya
+                runCatching { ctx.startActivity(intent) }
+            }, Modifier.fillMaxWidth(), icon = Icons.Filled.Email)
+            Text(
+                "Usar otro correo",
+                color = x.blue, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { sentTo = null }.padding(10.dp),
+            )
+        }
     }
 }
 

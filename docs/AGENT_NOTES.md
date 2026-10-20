@@ -2,6 +2,12 @@
 
 Notas de arquitectura, decisiones y cambios. Añadir una entrada por sesión.
 
+## 2026-10-20 — Reset de contraseña: pantalla «Revisa tu correo»
+
+Tras «Enviar enlace», `ForgotScreen` ya no salta al formulario de código: muestra «Revisa tu correo» (correo
+al que se envió, aviso de Spam/10 min de espera, botón «Abrir correo» y «Usar otro correo»). «Introducir código»
+sigue disponible para pegar el token a mano. No compilado en este equipo (Gradle loopback): revisar con `assembleDebug`.
+
 ## 2026-10-20 — Estado desfasado al fichar
 
 Si el servidor responde `SEQUENCE_MISMATCH` (se fichó desde la web u otro móvil), `FichajeViewModel.fichar`
