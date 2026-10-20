@@ -200,7 +200,7 @@ private fun SummaryChip(text: String, color: Color) {
 // ───────── Calendar (personal / team) — also home of "Mis fichajes" ─────────
 
 @Composable
-fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (String) -> Unit = {}, onMyRecord: () -> Unit = {}) {
+fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (String) -> Unit = {}, onMyRecord: () -> Unit = {}, onGoHome: () -> Unit = {}) {
     val x = Xyon.colors
     val events by vm.events.state.collectAsState()
     val mine by vm.mine.state.collectAsState()
@@ -211,6 +211,7 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
     var selected by remember { mutableStateOf(LocalDate.now()) }
     var showTeam by remember { mutableStateOf(false) }
     var adjustFor by remember { mutableStateOf<Fichaje?>(null) }
+    var requestExitFor by remember { mutableStateOf<Fichaje?>(null) }
     LaunchedEffect(Unit) { vm.msg.collect { snack(it) } }
     LaunchedEffect(month) { vm.loadMonth(month) }
 
@@ -288,7 +289,21 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
                     StatPill("Horas", "%.1fh".format(hours), Icons.Filled.Schedule, Lilac, Modifier.weight(1f))
                 }
 
-                Text(fmtDate(selected.toString()).replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(top = 4.dp))
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        fmtDate(selected.toString()).replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.headlineMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    // Mismo botón de fichar que Inicio, para el día de hoy
+                    if (selected == LocalDate.now()) {
+                        TextButton(onGoHome) {
+                            Icon(Icons.AutoMirrored.Filled.Login, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Fichar ahora", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
                 val dayStats = statsByDate[selected]
                 val dayEvents = evOn(selected); val dayMine = vacOn(selected, myVac); val dayTeam = vacOn(selected, teamVac)
 
@@ -313,6 +328,14 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
                                 Text(if (f.tipo == "ENTRADA") "Entrada" else "Salida", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
                                 Text(fmtTimeOf(f.timestamp), fontWeight = FontWeight.Black)
                                 TextButton({ adjustFor = f }) { Text("Ajustar") }
+                            }
+                        }
+                        val openEntry = dayStats.fichajes.takeIf { it.size % 2 == 1 }?.last()?.takeIf { it.tipo == "ENTRADA" }
+                        if (openEntry != null && !selected.isAfter(LocalDate.now())) {
+                            TextButton({ requestExitFor = openEntry }, Modifier.padding(top = 4.dp)) {
+                                Icon(Icons.AutoMirrored.Filled.Logout, null, tint = Coral, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Solicitar salida", color = Coral, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -351,6 +374,40 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
     adjustFor?.let { f ->
         AdjustFichajeDialog(f, onDismiss = { adjustFor = null }) { req -> vm.requestAdjustment(req); adjustFor = null }
     }
+    requestExitFor?.let { f ->
+        RequestExitDialog(f, onDismiss = { requestExitFor = null }) { req -> vm.requestAdjustment(req); requestExitFor = null }
+    }
+}
+
+/** Entrada abierta sin salida: el empleado pide al responsable que la añada (ADD_EXIT). */
+@Composable
+private fun RequestExitDialog(entry: Fichaje, onDismiss: () -> Unit, onSend: (CreateAdjustmentRequest) -> Unit) {
+    var time by remember { mutableStateOf("") }
+    var reason by remember { mutableStateOf("") }
+    val valid = Regex("^([01]\\d|2[0-3]):[0-5]\\d$").matches(time) && reason.trim().length >= 5
+    AlertDialog(
+        onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        title = { Text("Solicitar salida") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Entrada del ${fmtDate(entry.timestamp)} a las ${fmtTimeOf(entry.timestamp)} sin salida registrada.",
+                    color = Xyon.colors.inkSoft,
+                )
+                XField(time, { time = it }, "Hora de salida (HH:mm)")
+                XField(reason, { reason = it }, "Motivo (mín. 5 caracteres)", singleLine = false, minLines = 2)
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = {
+                val date = parseDate(entry.timestamp) ?: return@TextButton
+                val ldt = java.time.LocalDateTime.of(date, java.time.LocalTime.parse(time))
+                val iso = ldt.atZone(java.time.ZoneId.systemDefault()).toInstant().toString()
+                onSend(CreateAdjustmentRequest(entry.id, iso, reason.trim(), "ADD_EXIT"))
+            }) { Text("Enviar") }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("Cancelar") } },
+    )
 }
 
 @Composable private fun Dot(c: Color) = Box(Modifier.size(6.dp).clip(CircleShape).background(c))

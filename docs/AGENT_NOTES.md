@@ -2,6 +2,21 @@
 
 Notas de arquitectura, decisiones y cambios. Añadir una entrada por sesión.
 
+## 2026-10-20 — Fichajes: estado en vivo y ajustes desde el calendario
+
+- **Estado al volver a la app**: `HomeScreen` observa el lifecycle del destino y llama a
+  `refreshAll()` en `ON_RESUME`. Así un fichaje hecho desde la web se refleja al abrir o
+  volver a Inicio, sin reiniciar la app.
+- **Calendario → día seleccionado**:
+  - Se mantiene “Ajustar” por cada entrada/salida (`AdjustFichajeDialog`, hora local).
+  - Nuevo **“Solicitar salida”** cuando el último fichaje del día es una ENTRADA abierta:
+    `CreateAdjustmentRequest.kind = "ADD_EXIT"` (mismo flujo de aprobación del responsable).
+  - Nuevo acceso **“Fichar ahora”** para el día de hoy, que lleva al botón de Inicio
+    (allí viven ubicación, modo oficina/casa y cola offline).
+- El estado del día y las solicitudes se refrescan al volver al calendario.
+
+Verificación: `testDebugUnitTest` (46 tests) y `assembleDebug`.
+
 ## 2026-10-20 — App Link del reset de contraseña
 
 El botón del correo de reset (`https://<dominio>/reset-password?token=…&email=…`) abre la

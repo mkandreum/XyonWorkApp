@@ -49,6 +49,16 @@ fun HomeScreen(
     val busy by vm.busy.collectAsState()
     val pendingOffline by vm.pendingOffline.collectAsState()
     LaunchedEffect(Unit) { vm.events.collect { snack(it) } }
+    // Al volver del background (o regresar a Inicio) se relee el estado: si se fichó desde
+    // la web u otro dispositivo, el botón no puede quedarse con el estado antiguo.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) vm.refreshAll()
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
 
     var pendingToggle by remember { mutableStateOf<Boolean?>(null) }
     // Office / home, remembered on the device

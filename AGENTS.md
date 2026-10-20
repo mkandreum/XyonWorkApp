@@ -64,6 +64,8 @@ users. Split shifts schedule both starts. If fetching fails, keep the previous p
 ## Current change log
 
 See `docs/AGENT_NOTES.md`. Latest session:
+- Time-tracking: Home refreshes on `ON_RESUME`; calendar day sheet can request a missing
+  exit (`ADD_EXIT`) and opens “Fichar ahora” for today.
 - App Link for the password-reset email (`https://work.xyoncloud.win/reset-password`):
   opens “Nueva contraseña” with token/email prefilled; server side is
   `/.well-known/assetlinks.json` in XyonWork (see `docs/APP_LINKS.md`).

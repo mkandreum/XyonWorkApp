@@ -139,7 +139,7 @@ data class FichajeAdjustment(
     val status: String = "PENDING", val rejectionReason: String? = null, val createdAt: String? = null,
 )
 @Serializable
-data class CreateAdjustmentRequest(val fichajeId: String, val requestedTimestamp: String, val reason: String)
+data class CreateAdjustmentRequest(val fichajeId: String, val requestedTimestamp: String, val reason: String, val kind: String? = null)
 @Serializable data class RejectRequest(val rejectionReason: String)
 
 @Serializable
