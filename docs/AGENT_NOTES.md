@@ -2,6 +2,21 @@
 
 Notas de arquitectura, decisiones y cambios. Añadir una entrada por sesión.
 
+## 2026-10-20 — Calendario rediseñado (7.5) y vibración (7.4)
+
+- **Calendario** (`ui/CalendarScreen.kt`, antes en `RequestScreens.kt`): celdas redondeadas con las horas del día, triángulo de
+  incidencia sin resolver (sin solicitud de ajuste pendiente/aprobada), horas extra en naranja, aro en hoy con punto en directo,
+  leyenda con contadores y resumen del mes (totales vs programadas con barra, días trabajados, media/día). El detalle del día es
+  una `ModalBottomSheet` con las sesiones entrada→salida (duración, estado del ajuste, toque en la hora para ajustar),
+  «Solicitar salida», «Fichar salida/ahora» (hoy) y el total frente a lo previsto.
+- **Lógica pura** en `ui/CalendarMath.kt` con `CalendarMathTest` (10 tests JVM); misma regla que la web (`utils/calendarDay.ts`).
+  `FichajeDayStats` lee ahora `daySchedule` del servidor para las horas previstas.
+- **Vibración** (`ui/Haptics.kt`): `ProvideTapHaptics` engancha el `LocalIndication` del tema (toque corto al completar cualquier
+  pulsación con ripple), `HapticSwitch`/`HapticCheckbox`, y confirmación/rechazo al fichar.
+- Pendiente: turnos de noche en el cálculo diario (backend) y «Recordar al responsable» (requiere endpoint).
+
+Verificación: `testDebugUnitTest` y `bundleRelease`/`assembleRelease` firmados (7.5, versionCode 12).
+
 ## 2026-10-20 — Reset de contraseña: pantalla «Revisa tu correo»
 
 Tras «Enviar enlace», `ForgotScreen` ya no salta al formulario de código: muestra «Revisa tu correo» (correo

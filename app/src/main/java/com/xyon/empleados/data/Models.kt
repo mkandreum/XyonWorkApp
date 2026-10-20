@@ -130,6 +130,15 @@ data class FichajeDayStats(
     val date: String = "", val fichajes: List<Fichaje> = emptyList(), val horasTrabajadas: Double = 0.0,
     val isComplete: Boolean = false, val isLate: Boolean = false, val isEarlyDeparture: Boolean = false,
     val turno: TurnoInfo? = null,
+    /** Schedule the server resolved for that day (shift, per-day override or one-off exception). */
+    val daySchedule: DaySchedule? = null,
+)
+/** Start/end of a (possibly split) working day, as "HH:mm". */
+@Serializable
+data class DaySchedule(
+    val horaEntrada: String? = null, val horaSalida: String? = null,
+    val horaEntradaTarde: String? = null,
+    @kotlinx.serialization.SerialName("horaSalidaMañana") val horaSalidaManana: String? = null,
 )
 
 @Serializable
