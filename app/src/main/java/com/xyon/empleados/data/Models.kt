@@ -118,6 +118,8 @@ data class FichajeStatus(
 data class CreateFichajeRequest(
     val tipo: String, val latitude: Double? = null, val longitude: Double? = null, val accuracy: Float? = null,
     val workMode: String = "OFFICE",
+    /** Made without connection: the server accepts [clientTimestamp] within a limit (APP_OFFLINE). */
+    val offline: Boolean = false, val clientTimestamp: String? = null,
 )
 @Serializable
 data class CreateFichajeResponse(
@@ -186,3 +188,20 @@ data class OverlapResponse(val count: Int = 0, val people: List<OverlapPerson> =
 
 @Serializable
 data class OkResponse(val ok: Boolean = true)
+
+// ── Attendance report (GET fichajes/report?format=json), same data as the web PDF/CSV ──
+@Serializable data class ReportPeriod(val from: String = "", val to: String = "", val label: String = "")
+@Serializable data class ReportUser(val id: String = "", val name: String = "", val email: String = "", val department: String = "", val position: String? = null)
+@Serializable data class ReportDay(
+    val date: String = "", val dayName: String = "", val firstEntry: String? = null, val lastExit: String? = null,
+    val hours: Double? = null, val status: String = "", val kind: String = "none", val observations: String = "", val workMode: String? = null,
+)
+@Serializable data class ReportSummary(
+    val daysWorked: Int = 0, val daysVacation: Int = 0, val daysAbsent: Int = 0, val daysLate: Int = 0,
+    val daysIncident: Int = 0, val daysRemote: Int = 0, val totalHours: Double = 0.0,
+)
+@Serializable data class UserReport(val user: ReportUser = ReportUser(), val days: List<ReportDay> = emptyList(), val summary: ReportSummary = ReportSummary())
+@Serializable data class AttendanceReportData(
+    val period: ReportPeriod = ReportPeriod(), val generatedAt: String = "", val fileBase: String = "informe", val reports: List<UserReport> = emptyList(),
+)
+

@@ -64,6 +64,14 @@ class SecurityViewModel @Inject constructor(private val api: Api) : ViewModel() 
         load()
     }
 
+    /** GDPR access/portability: all my data as JSON in Downloads. */
+    fun exportMyData(ctx: Context) = viewModelScope.launch {
+        _busy.value = true
+        safeCall { saveToDownloads(ctx, api.myDataExport().bytes(), "mis-datos-${java.time.LocalDate.now()}.json", "application/json") }
+            .onSuccess { _msg.tryEmit("Guardado en $it") }.onFailure { _msg.tryEmit(it.userMessage()) }
+        _busy.value = false
+    }
+
     fun doneWithCodes() { _codes.value = null }
     fun cancelSetup() { _setup.value = null }
 
@@ -158,6 +166,12 @@ fun SecurityScreen(session: SessionViewModel, onBack: () -> Unit, snack: (String
                     XyonButton("Desactivar", { vm.disable(password, code, session); password = ""; code = "" }, Modifier.fillMaxWidth(),
                         enabled = password.isNotEmpty() && code.isNotBlank(), loading = busy, style = XyonButtonStyle.Light)
                 }
+            }
+
+            GlassCard(Modifier.fillMaxWidth()) {
+                Text("Tus datos", fontWeight = FontWeight.Bold, color = x.ink)
+                Text("Descarga una copia de tus datos personales (perfil, fichajes, ausencias, nóminas…).", color = x.inkSoft, modifier = Modifier.padding(vertical = 8.dp))
+                XyonButton("Descargar mis datos", { vm.exportMyData(ctx) }, Modifier.fillMaxWidth(), style = XyonButtonStyle.Light, icon = Icons.Filled.Download, showArrow = false, loading = busy)
             }
 
             GlassCard(Modifier.fillMaxWidth()) {

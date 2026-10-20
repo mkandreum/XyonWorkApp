@@ -59,12 +59,16 @@ fun needsLegacyStoragePermission(ctx: Context): Boolean =
  * Saves a PDF into the public Downloads folder. Uses MediaStore on Android 10+ (no permission needed)
  * and the legacy public directory on Android 8/9. Returns the user-visible location or throws.
  */
-fun savePdfToDownloads(ctx: Context, bytes: ByteArray, name: String): String {
-    val file = pdfFileName(name)
+fun savePdfToDownloads(ctx: Context, bytes: ByteArray, name: String): String =
+    saveToDownloads(ctx, bytes, pdfFileName(name), "application/pdf")
+
+/** Saves any file (CSV, JSON…) into the public Downloads folder; same rules as [savePdfToDownloads]. */
+fun saveToDownloads(ctx: Context, bytes: ByteArray, fileName: String, mime: String): String {
+    val file = fileName.replace(Regex("[^A-Za-z0-9._-]"), "_")
     if (android.os.Build.VERSION.SDK_INT >= 29) {
         val values = android.content.ContentValues().apply {
             put(android.provider.MediaStore.Downloads.DISPLAY_NAME, file)
-            put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/pdf")
+            put(android.provider.MediaStore.Downloads.MIME_TYPE, mime)
             put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
         }
         val resolver = ctx.contentResolver

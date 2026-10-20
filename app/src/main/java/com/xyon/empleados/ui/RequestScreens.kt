@@ -200,7 +200,7 @@ private fun SummaryChip(text: String, color: Color) {
 // ───────── Calendar (personal / team) — also home of "Mis fichajes" ─────────
 
 @Composable
-fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (String) -> Unit = {}) {
+fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (String) -> Unit = {}, onMyRecord: () -> Unit = {}) {
     val x = Xyon.colors
     val events by vm.events.state.collectAsState()
     val mine by vm.mine.state.collectAsState()
@@ -228,6 +228,8 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
 
     Column(Modifier.fillMaxSize()) {
         ScreenHeader(if (showTeam) "Calendario del equipo" else "Calendario", "Tus fichajes, ausencias y eventos") {
+            // Right of access to the own time-tracking record (RD-ley 8/2019)
+            IconButton(onMyRecord) { Icon(Icons.Filled.Description, "Mi registro de jornada") }
             if (user.isManager) FilterChip(showTeam, { showTeam = !showTeam }, { Text("Equipo") }, leadingIcon = { Icon(Icons.Filled.Groups, null, Modifier.size(18.dp)) })
         }
         LoadScreen(events, { vm.refresh(month) }) {

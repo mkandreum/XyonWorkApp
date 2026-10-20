@@ -47,6 +47,7 @@ fun HomeScreen(
     val warnings by vm.warnings.state.collectAsState()
     var justifyFor by remember { mutableStateOf<AttendanceWarning?>(null) }
     val busy by vm.busy.collectAsState()
+    val pendingOffline by vm.pendingOffline.collectAsState()
     LaunchedEffect(Unit) { vm.events.collect { snack(it) } }
 
     var pendingToggle by remember { mutableStateOf<Boolean?>(null) }
@@ -110,6 +111,20 @@ fun HomeScreen(
                         } else go(entering)
                     }
                 } }
+            }
+            if (pendingOffline.isNotEmpty()) item {
+                val shape = RoundedCornerShape(28.dp)
+                Row(
+                    Modifier.fillMaxWidth().clip(shape).background(Sun).border(1.5.dp, Xyon.colors.outline, shape).padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.CloudOff, null, tint = InkBlack)
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "${pendingOffline.size} ${if (pendingOffline.size == 1) "fichaje guardado" else "fichajes guardados"} sin conexión. Se enviarán solos al recuperar la red.",
+                        color = InkBlack, fontWeight = FontWeight.Bold,
+                    )
+                }
             }
             status.data?.missingExit?.let { m ->
                 item {

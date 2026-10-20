@@ -59,6 +59,7 @@ private val SECTIONS = listOf(
     Section("Tiempo y equipo", listOf(
         Tool("teamweek", "Semana del equipo", "Quién trabaja y quién falta", Icons.Filled.Groups, Lime, adminOnly = false),
         Tool("fichajes", "Fichajes", "Registros, edición e informes", Icons.Filled.AccessTime, Lilac, adminOnly = false),
+        Tool("reports", "Informes", "Asistencia en PDF o CSV", Icons.Filled.Assessment, Coral, adminOnly = false),
         Tool("assign", "Asignar turnos", "Turno de cada persona por día", Icons.Filled.CalendarMonth, Sun, adminOnly = false),
         Tool("overrides", "Excepciones de horario", "Días libres o con otro horario", Icons.Filled.DateRange, Coral, adminOnly = false),
         Tool("shifts", "Turnos y horarios", "Definir turnos por departamento", Icons.Filled.Schedule, Lime),
@@ -200,6 +201,7 @@ fun NavGraphBuilder.adminRoutes(nav: NavHostController, user: User, snack: (Stri
     composable("adm/abs") { AdminRequestsScreen("abs", !admin, back, snack) }
     composable("adm/adjust") { AdminAdjustmentsScreen(back, snack) }
     tabAware("adm/fichajes") { AdminFichajesScreen(admin, back, snack) }
+    composable("adm/reports") { com.xyon.empleados.ui.ReportsScreen(user, self = false, back, snack) }
     composable("adm/late") { AdminLateScreen(back, snack) }
     composable("adm/shifts") { AdminShiftsScreen(back, snack) }
     composable("adm/assign") { AdminAssignScreen(admin, back, snack) }

@@ -4,6 +4,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.KSerializer
@@ -28,6 +30,7 @@ class Loader<T>(
     private val key: String,
     private val ser: KSerializer<T>,
     private val fetch: suspend () -> T,
+    private val online: StateFlow<Boolean>? = null,
 ) {
     private val _state = MutableStateFlow(LoadState<T>())
     val state: StateFlow<LoadState<T>> = _state.asStateFlow()
@@ -41,11 +44,26 @@ class Loader<T>(
             }
             load()
         }
+        // Back online: refresh whatever was showing cached data or an error
+        online?.let { flow ->
+            scope.launch {
+                flow.drop(1).distinctUntilChanged().collect { up ->
+                    val st = _state.value
+                    if (up && (st.offline || st.error != null)) refresh()
+                }
+            }
+        }
     }
 
     fun refresh() { scope.launch { _state.update { it.copy(refreshing = true) }; load() } }
 
     private suspend fun load() {
+        // No network: show the cache right away instead of waiting for the connection timeout
+        if (online?.value == false) {
+            _state.update { it.copy(loading = false, refreshing = false, offline = it.data != null,
+                error = if (it.data == null) "Sin conexión. Se cargará al recuperar la red." else null) }
+            return
+        }
         safeCall(fetch).onSuccess { d ->
             _state.value = LoadState(data = d, loading = false)
             cache.put(key, json.encodeToString(ser, d))
@@ -59,9 +77,9 @@ class Loader<T>(
 }
 
 @Singleton
-class LoaderFactory @Inject constructor(private val cache: CacheStore, private val json: Json) {
+class LoaderFactory @Inject constructor(private val cache: CacheStore, private val json: Json, private val network: NetworkMonitor) {
     fun <T> create(scope: CoroutineScope, key: String, ser: KSerializer<T>, fetch: suspend () -> T) =
-        Loader(scope, cache, json, key, ser, fetch)
+        Loader(scope, cache, json, key, ser, fetch, network.online)
 
     inline fun <reified T> create(scope: CoroutineScope, key: String, noinline fetch: suspend () -> T) =
         create(scope, key, serializer<T>(), fetch)

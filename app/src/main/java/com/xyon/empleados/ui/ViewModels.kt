@@ -35,6 +35,8 @@ val User.isAdmin get() = role == "ADMIN"
 class SessionViewModel @Inject constructor(
     private val api: Api, private val store: SessionStore, private val cache: CacheStore,
     private val json: kotlinx.serialization.json.Json, private val reminders: ReminderScheduler,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appCtx: android.content.Context,
+    private val offline: OfflineFichajes,
 ) : ViewModel() {
     private val _auth = MutableStateFlow<AuthState>(AuthState.Loading)
     val auth: StateFlow<AuthState> = _auth.asStateFlow()
@@ -80,6 +82,9 @@ class SessionViewModel @Inject constructor(
     private fun enter(cached: User?) {
         viewModelScope.launch {
             if (cached != null) _auth.value = AuthState.LoggedIn(cached)
+            // Notices without Firebase + pending offline clock-ins (works also when offline at start)
+            Background.startNotifications(appCtx)
+            if (offline.all().isNotEmpty()) Background.syncFichajes(appCtx)
             safeCall { api.profile() }.onSuccess {
                 cache.put("me", json.encodeToString(User.serializer(), it)); _auth.value = AuthState.LoggedIn(it)
                 reminders.refresh()
@@ -106,6 +111,7 @@ class SessionViewModel @Inject constructor(
         _mfaChallenge.value = null
         _auth.value = AuthState.LoggedIn(user)
         reminders.refresh()
+        Background.startNotifications(appCtx)
     }
 
     /** Stores a renewed session (password change, MFA on/off) without leaving the current screen. */
@@ -172,8 +178,13 @@ class SessionViewModel @Inject constructor(
         // alarms for a session that is already closed.
         store.clear(); cache.clear()
         reminders.cancel()
+        Background.stop(appCtx)
+        // Offline clock-ins belong to this session: never send them as another user
+        val dropped = offline.all().size
+        offline.clear()
         _locked.value = false; _auth.value = AuthState.LoggedOut
         msg?.let { _message.tryEmit(it) }
+        if (dropped > 0) _message.tryEmit("Se han descartado $dropped fichajes sin conexión que no se habían enviado")
     }
 
     fun setBiometric(on: Boolean) = viewModelScope.launch { store.setBiometric(on) }
@@ -208,7 +219,11 @@ class SessionViewModel @Inject constructor(
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val api: Api, lf: LoaderFactory, me: MeProvider, private val reminders: ReminderScheduler,
+    private val offline: OfflineFichajes, private val network: NetworkMonitor,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appCtx: android.content.Context,
 ) : ViewModel() {
+    /** Clock-ins made without connection that are waiting to be sent. */
+    val pendingOffline = offline.pending
     val status = lf.create<FichajeStatus>(viewModelScope, "fichaje_current") { api.fichajeCurrent() }
     val vacations = lf.create<List<VacationRequest>>(viewModelScope, "vacations") { api.vacations() }
     val balance = lf.create<UserBenefitsBalance>(viewModelScope, "balance") { api.myBalance() }
@@ -236,12 +251,36 @@ class DashboardViewModel @Inject constructor(
     }
 
     /** workMode REMOTE = teletrabajo: no location is sent (it would be the employee's home). */
+    /**
+     * Without network (or with older offline clock-ins still queued, to keep their order) the
+     * clock-in is saved on the device with its time and sent as soon as there is connection.
+     */
+    private fun queueOffline(entering: Boolean, req: CreateFichajeRequest) {
+        val now = java.time.Instant.now().toString()
+        offline.add(PendingFichaje(java.util.UUID.randomUUID().toString(), req.tipo, req.workMode, now, req.latitude, req.longitude, req.accuracy))
+        val current = status.state.value.data ?: FichajeStatus()
+        status.set(current.copy(
+            hasActiveEntry = entering,
+            currentFichaje = if (entering) Fichaje(tipo = "ENTRADA", timestamp = now, workMode = req.workMode) else null,
+        ))
+        Background.syncFichajes(appCtx)
+        _justDone.tryEmit(entering)
+        _events.tryEmit("Sin conexión: ${if (entering) "entrada" else "salida"} guardada en el móvil. Se enviará al recuperar la red.")
+    }
+
     fun fichar(entering: Boolean, lat: Double?, lon: Double?, acc: Float?, workMode: String = "OFFICE") = viewModelScope.launch {
         _busy.value = true
         val tipo = if (entering) "ENTRADA" else "SALIDA"
         val remote = workMode == "REMOTE"
         val req = if (remote) CreateFichajeRequest(tipo, workMode = "REMOTE") else CreateFichajeRequest(tipo, lat, lon, acc, "OFFICE")
-        safeCall { api.fichar(req) }.onSuccess {
+        if (!network.online.value || offline.all().isNotEmpty()) {
+            queueOffline(entering, req)
+            _busy.value = false
+            return@launch
+        }
+        safeCall { api.fichar(req) }.onFailure { e ->
+            if (e.isOffline) { queueOffline(entering, req); _busy.value = false; return@launch }
+        }.onSuccess {
             if (entering && remote) _events.tryEmit("Entrada registrada en teletrabajo")
             it.status?.let { s -> status.set(s) } ; status.refresh(); week.refresh()
             reminders.refresh()

@@ -190,7 +190,8 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
                     composable("home") { Scoped(this) {
                         HomeScreen(user, { push("notifications") }, { tab("calendar") }, { tab("payroll") }, { tab("news") }, { push("team") }, { push("admin") }, snack = say)
                     } }
-                    composable("calendar") { Scoped(this) { CalendarScreen(user, snack = say) } }
+                    composable("calendar") { Scoped(this) { CalendarScreen(user, snack = say, onMyRecord = { push("myreport") }) } }
+                    composable("myreport") { Scoped(this) { ReportsScreen(user, self = true, { nav.popBackStack() }, say) } }
                     composable("requests") { Scoped(this) { RequestsScreen(snack = say) } }
                     composable("news") { Scoped(this) { NewsScreen(newsVm) { n -> push("news/${n.id}") } } }
                     composable("news/{id}") { e -> Scoped(this) {

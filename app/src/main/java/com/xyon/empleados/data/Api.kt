@@ -23,6 +23,17 @@ interface Api {
     @POST("auth/mfa/enable") suspend fun mfaEnable(@Body b: MfaCodeRequest): AuthResponse
     @POST("auth/mfa/disable") suspend fun mfaDisable(@Body b: MfaDisableRequest): AuthResponse
     @POST("auth/logout-all") suspend fun logoutAll(): MessageResponse
+    // Attendance reports: own record (employee), department or person (manager/admin)
+    @GET("fichajes/report") suspend fun reportData(
+        @Query("from") from: String, @Query("to") to: String,
+        @Query("userId") userId: String?, @Query("department") department: String?, @Query("format") format: String,
+    ): AttendanceReportData
+    @Streaming @GET("fichajes/report") suspend fun reportCsv(
+        @Query("from") from: String, @Query("to") to: String,
+        @Query("userId") userId: String?, @Query("department") department: String?, @Query("format") format: String,
+    ): ResponseBody
+    /** All my personal data (GDPR access/portability) as JSON. */
+    @Streaming @GET("users/me/export") suspend fun myDataExport(): ResponseBody
     @Multipart @POST("upload/avatar") suspend fun uploadAvatar(@Part file: MultipartBody.Part): UploadResult
 
     @Multipart @POST("upload/justification") suspend fun uploadJustification(@Part file: MultipartBody.Part): UploadResult
