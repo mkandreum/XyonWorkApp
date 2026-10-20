@@ -100,6 +100,8 @@ data class EventItem(
 data class Fichaje(
     val id: String = "", val userId: String = "", val tipo: String = "ENTRADA",
     val timestamp: String = "", val department: String? = null, val user: User? = null,
+    /** OFFICE | REMOTE (teletrabajo); null on records from before the switch existed. */
+    val workMode: String? = null,
 )
 @Serializable
 data class TurnoInfo(
@@ -115,6 +117,7 @@ data class FichajeStatus(
 @Serializable
 data class CreateFichajeRequest(
     val tipo: String, val latitude: Double? = null, val longitude: Double? = null, val accuracy: Float? = null,
+    val workMode: String = "OFFICE",
 )
 @Serializable
 data class CreateFichajeResponse(

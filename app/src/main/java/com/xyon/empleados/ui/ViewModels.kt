@@ -235,10 +235,14 @@ class DashboardViewModel @Inject constructor(
             .onFailure { _events.tryEmit(it.userMessage()) }
     }
 
-    fun fichar(entering: Boolean, lat: Double?, lon: Double?, acc: Float?) = viewModelScope.launch {
+    /** workMode REMOTE = teletrabajo: no location is sent (it would be the employee's home). */
+    fun fichar(entering: Boolean, lat: Double?, lon: Double?, acc: Float?, workMode: String = "OFFICE") = viewModelScope.launch {
         _busy.value = true
         val tipo = if (entering) "ENTRADA" else "SALIDA"
-        safeCall { api.fichar(CreateFichajeRequest(tipo, lat, lon, acc)) }.onSuccess {
+        val remote = workMode == "REMOTE"
+        val req = if (remote) CreateFichajeRequest(tipo, workMode = "REMOTE") else CreateFichajeRequest(tipo, lat, lon, acc, "OFFICE")
+        safeCall { api.fichar(req) }.onSuccess {
+            if (entering && remote) _events.tryEmit("Entrada registrada en teletrabajo")
             it.status?.let { s -> status.set(s) } ; status.refresh(); week.refresh()
             reminders.refresh()
             _justDone.tryEmit(entering)

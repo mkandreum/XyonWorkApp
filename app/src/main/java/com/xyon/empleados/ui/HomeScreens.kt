@@ -50,9 +50,13 @@ fun HomeScreen(
     LaunchedEffect(Unit) { vm.events.collect { snack(it) } }
 
     var pendingToggle by remember { mutableStateOf<Boolean?>(null) }
+    // Office / home, remembered on the device
+    val modePrefs = remember { ctx.getSharedPreferences("fichaje_prefs", android.content.Context.MODE_PRIVATE) }
+    var workMode by remember { mutableStateOf(modePrefs.getString("work_mode", "OFFICE") ?: "OFFICE") }
     fun go(entering: Boolean) {
+        if (workMode == "REMOTE") { vm.fichar(entering, null, null, null, "REMOTE"); return }
         val loc = lastLocation(ctx)
-        vm.fichar(entering, loc?.latitude, loc?.longitude, loc?.accuracy)
+        vm.fichar(entering, loc?.latitude, loc?.longitude, loc?.accuracy, "OFFICE")
     }
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         pendingToggle?.let { e -> go(e); pendingToggle = null }
@@ -95,9 +99,12 @@ fun HomeScreen(
                         clockedIn = clockedIn, since = it.currentFichaje?.timestamp, busy = busy,
                         expected = it.turno?.label ?: it.turno?.expectedEntry?.let { e -> "Entrada prevista $e" },
                         successEvents = vm.justDone,
+                        workMode = if (clockedIn) it.currentFichaje?.workMode ?: workMode else workMode,
+                        onWorkMode = { m -> workMode = m; modePrefs.edit().putString("work_mode", m).apply() },
                     ) {
                         val entering = !clockedIn
-                        if (!hasLocationPermission(ctx)) {
+                        // At home no location is used, so no permission is requested
+                        if (workMode != "REMOTE" && !hasLocationPermission(ctx)) {
                             pendingToggle = entering
                             permLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                         } else go(entering)

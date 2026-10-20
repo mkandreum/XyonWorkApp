@@ -37,6 +37,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xyon.empleados.ui.theme.*
 import kotlinx.coroutines.delay
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Business
 import kotlinx.coroutines.flow.Flow
 import java.time.Duration
 import java.time.Instant
@@ -50,7 +58,9 @@ import kotlin.math.sin
 @Composable
 fun FichajeHero(
     clockedIn: Boolean, since: String?, busy: Boolean, expected: String?,
-    successEvents: Flow<Boolean>, onToggle: () -> Unit,
+    successEvents: Flow<Boolean>,
+    workMode: String = "OFFICE", onWorkMode: (String) -> Unit = {},
+    onToggle: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
@@ -130,10 +140,46 @@ fun FichajeHero(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (inn) {
                     Text(elapsed.ifEmpty { "--:--:--" }, style = MaterialTheme.typography.displayMedium, color = Color.White)
-                    Text("Jornada en curso", color = Color.White.copy(alpha = .8f))
+                    Text(if (workMode == "REMOTE") "Jornada en curso · teletrabajo" else "Jornada en curso", color = Color.White.copy(alpha = .8f))
                 } else {
                     Text("Fuera de jornada", style = MaterialTheme.typography.headlineMedium, color = Color.White)
-                    Text(expected ?: "Toca para fichar tu entrada", color = Color.White.copy(alpha = .8f))
+                    Text(expected ?: "Elige dónde trabajas y toca para fichar", color = Color.White.copy(alpha = .8f))
+                }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        // The mode belongs to the entry: locked while the shift is open
+        WorkModeSwitch(workMode, enabled = !clockedIn && !busy, onChange = onWorkMode)
+    }
+}
+
+/** Office / home pill on the blue field: a lime thumb springs between the two options. */
+@Composable
+fun WorkModeSwitch(value: String, enabled: Boolean, onChange: (String) -> Unit) {
+    val haptic = LocalHapticFeedback.current
+    val options = listOf("OFFICE" to "Oficina", "REMOTE" to "Casa")
+    val index = if (value == "REMOTE") 1 else 0
+    val width = 256.dp
+    val thumbX by animateDpAsState((width - 8.dp) / 2 * index, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMediumLow), label = "thumb")
+    Box(
+        Modifier.width(width).height(48.dp).clip(CircleShape).background(Color.White.copy(alpha = .15f)).padding(4.dp)
+            .semantics { contentDescription = "Dónde trabajas hoy: ${if (index == 1) "casa" else "oficina"}" },
+    ) {
+        Box(Modifier.offset(x = thumbX).width((width - 8.dp) / 2).fillMaxHeight().clip(CircleShape).background(Lime))
+        Row(Modifier.fillMaxSize()) {
+            options.forEachIndexed { i, (key, label) ->
+                val selected = i == index
+                val tint by animateColorAsState(if (selected) InkBlack else Color.White.copy(alpha = if (enabled) .85f else .55f), label = "t$i")
+                Row(
+                    Modifier.weight(1f).fillMaxHeight().clip(CircleShape)
+                        .selectable(selected, enabled = enabled && !selected, role = Role.RadioButton) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onChange(key)
+                        },
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(if (key == "REMOTE") Icons.Filled.Home else Icons.Filled.Business, null, tint = tint, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(label, color = tint, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
                 }
             }
         }
