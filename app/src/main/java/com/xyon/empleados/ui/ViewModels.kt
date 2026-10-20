@@ -289,7 +289,12 @@ class DashboardViewModel @Inject constructor(
             reminders.refresh()
             _justDone.tryEmit(entering)
             it.warning?.let { w -> _events.tryEmit(w) }
-        }.onFailure { _events.tryEmit(it.userMessage()) }
+        }.onFailure { e ->
+            val (code, message) = e.apiError()
+            _events.tryEmit(message)
+            // Estado desfasado (fichó desde la web u otro móvil): releer el real al instante
+            if (code == "SEQUENCE_MISMATCH") { status.refresh(); week.refresh() }
+        }
         _busy.value = false
     }
 }

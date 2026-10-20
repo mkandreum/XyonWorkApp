@@ -2,6 +2,11 @@
 
 Notas de arquitectura, decisiones y cambios. Añadir una entrada por sesión.
 
+## 2026-10-20 — Estado desfasado al fichar
+
+Si el servidor responde `SEQUENCE_MISMATCH` (se fichó desde la web u otro móvil), `FichajeViewModel.fichar`
+muestra el mensaje y relee estado y semana. No compilado en este equipo (Gradle loopback); revisar con `assembleDebug`.
+
 ## 2026-10-20 — Fichajes: estado en vivo y ajustes desde el calendario
 
 - **Estado al volver a la app**: `HomeScreen` observa el lifecycle del destino y llama a
