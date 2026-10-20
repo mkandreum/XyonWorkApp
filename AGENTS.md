@@ -64,6 +64,9 @@ users. Split shifts schedule both starts. If fetching fails, keep the previous p
 ## Current change log
 
 See `docs/AGENT_NOTES.md`. Latest session:
+- App Link for the password-reset email (`https://work.xyoncloud.win/reset-password`):
+  opens “Nueva contraseña” with token/email prefilled; server side is
+  `/.well-known/assetlinks.json` in XyonWork (see `docs/APP_LINKS.md`).
 - Added local exact clock-in reminders 5 minutes before each user's assigned shift.
 - Added schedule resolution with vacations, absences, overrides and day off.
 - Added exact-alarm permission card, boot/time-change rescheduling and hourly background sync.

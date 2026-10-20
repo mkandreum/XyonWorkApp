@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -70,6 +71,14 @@ fun AppRoot(vm: SessionViewModel = hiltViewModel()) {
     val activity = LocalContext.current as FragmentActivity
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(Unit) { vm.message.collect { snack.showSnackbar(it) } }
+    // Reset link while already logged in: the screen lives in the logged-out graph, so keep the
+    // link pending (it will open after logout) and explain it instead of doing nothing.
+    val resetLink by DeepLinks.pendingReset.collectAsState()
+    LaunchedEffect(resetLink, auth) {
+        if (resetLink != null && auth is AuthState.LoggedIn) {
+            snack.showSnackbar("Enlace para cambiar la contraseña recibido: cierra sesión para usarlo")
+        }
+    }
 
     // Leaving the app (home, app switcher, screen off) locks it; trips the app itself started
     // (PIN screen, pickers, share) and configuration changes (rotation) do not.
@@ -123,6 +132,15 @@ private fun AuthGraph(vm: SessionViewModel) {
     // No company chosen yet: start at "Conecta con tu empresa" (it also offers the build's default
     // server, so installs from before multi-company keep working with one tap).
     val start = remember { if (com.xyon.empleados.data.ServerConfig.isConfigured) "login" else "connect" }
+    // App Link del correo de reset: abre "Nueva contraseña" con token y email ya puestos.
+    val resetLink by DeepLinks.pendingReset.collectAsState()
+    LaunchedEffect(start, resetLink) {
+        val link = resetLink ?: return@LaunchedEffect
+        DeepLinks.pendingReset.value = null
+        val token = android.net.Uri.encode(link.token)
+        val email = android.net.Uri.encode(link.email)
+        nav.navigate("reset?token=$token&email=$email") { launchSingleTop = true }
+    }
     NavHost(nav, start, enterTransition = { slideInHorizontally(spring(stiffness = Spring.StiffnessMediumLow)) { it / 3 } + fadeIn() },
         exitTransition = { fadeOut() }, popEnterTransition = { fadeIn() },
         popExitTransition = { slideOutHorizontally { it / 3 } + fadeOut() }) {
@@ -135,7 +153,21 @@ private fun AuthGraph(vm: SessionViewModel) {
         }
         composable("register") { RegisterScreen(vm) { nav.popBackStack() } }
         composable("forgot") { ForgotScreen(vm, { nav.popBackStack() }, { nav.navigate("reset") }) }
-        composable("reset") { ResetScreen(vm, { nav.popBackStack() }) { nav.navigate("login") { popUpTo("login") { inclusive = true } } } }
+        composable(
+            "reset?token={token}&email={email}",
+            arguments = listOf(
+                navArgument("token") { defaultValue = "" },
+                navArgument("email") { defaultValue = "" },
+            ),
+        ) { entry ->
+            ResetScreen(
+                vm,
+                onBack = { nav.popBackStack() },
+                onDone = { nav.navigate("login") { popUpTo("login") { inclusive = true } } },
+                initialToken = entry.arguments?.getString("token").orEmpty(),
+                initialEmail = entry.arguments?.getString("email").orEmpty(),
+            )
+        }
     }
 }
 

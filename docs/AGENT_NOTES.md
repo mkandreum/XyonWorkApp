@@ -2,6 +2,35 @@
 
 Notas de arquitectura, decisiones y cambios. Añadir una entrada por sesión.
 
+## 2026-10-20 — App Link del reset de contraseña
+
+El botón del correo de reset (`https://<dominio>/reset-password?token=…&email=…`) abre la
+app en “Nueva contraseña” con los dos campos rellenados. Si el dominio no está verificado,
+Android lo abre en el navegador como antes: no hay regresión.
+
+### Diseño
+```
+Correo → https://work.xyoncloud.win/reset-password?token=…&email=…
+           │ (assetlinks.json verificado)
+           ▼
+MainActivity → DeepLinks.parseReset(dataString) → pendingReset
+           ▼
+AuthGraph → "reset?token=…&email=…" → ResetScreen(initialToken, initialEmail)
+```
+
+- `DeepLinks.parseReset` es puro (`java.net.URI`, sin `android.net.Uri`) y tiene 4 tests
+  JVM: solo acepta `https`, la ruta exacta `/reset-password`, y token + email válidos.
+- El manifest declara **un host explícito** (`work.xyoncloud.win`). Los comodines exigen
+  `assetlinks.json` en el dominio raíz y en Android ≤11 la verificación es todo o nada;
+  no se añaden hasta que el raíz esté configurado. Detalles en `docs/APP_LINKS.md`.
+- Con sesión iniciada el enlace no cambia de servidor ni cierra sesión: se avisa con un
+  snackbar y queda pendiente para después del logout (la pantalla vive en el grafo de
+  autenticación).
+- La huella SHA-256 del keystore se configura en el **servidor**
+  (`ANDROID_APP_CERT_SHA256`), no en la app.
+
+Verificación: `assembleDebug` y `testDebugUnitTest` (46 tests, 4 nuevos) en verde.
+
 ## 2026-10-19 — Recordatorios locales 5 minutos antes del turno
 
 ### Objetivo

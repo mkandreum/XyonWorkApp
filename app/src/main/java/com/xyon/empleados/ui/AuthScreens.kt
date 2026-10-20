@@ -212,9 +212,15 @@ fun ForgotScreen(vm: SessionViewModel, onBack: () -> Unit, onHaveToken: () -> Un
 }
 
 @Composable
-fun ResetScreen(vm: SessionViewModel, onBack: () -> Unit, onDone: () -> Unit) {
-    var token by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
+fun ResetScreen(
+    vm: SessionViewModel,
+    onBack: () -> Unit,
+    onDone: () -> Unit,
+    initialToken: String = "",
+    initialEmail: String = "",
+) {
+    var token by remember(initialToken) { mutableStateOf(initialToken) }
+    var email by remember(initialEmail) { mutableStateOf(initialEmail) }
     var pass by remember { mutableStateOf("") }
     val busy by vm.busy.collectAsState()
     val strong = isStrongPassword(pass)
