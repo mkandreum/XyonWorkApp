@@ -50,9 +50,14 @@ class SecurityViewModel @Inject constructor(private val api: Api) : ViewModel() 
 
     fun start() = action { _setup.value = api.mfaSetup() }
 
+    private var enabledResponse: AuthResponse? = null
+
     fun enable(code: String, session: SessionViewModel) = action {
         val r = api.mfaEnable(MfaCodeRequest(code.trim()))
-        session.renewSession(r)
+        // Token now (the old one is revoked); the user later, so the admin gate does not close
+        // this screen before the one-time recovery codes are seen
+        session.renewToken(r)
+        enabledResponse = r
         _codes.value = r.recoveryCodes
         _setup.value = null
         load()
@@ -72,7 +77,11 @@ class SecurityViewModel @Inject constructor(private val api: Api) : ViewModel() 
         _busy.value = false
     }
 
-    fun doneWithCodes() { _codes.value = null }
+    fun doneWithCodes(session: SessionViewModel) {
+        _codes.value = null
+        enabledResponse?.let { session.renewSession(it) }
+        enabledResponse = null
+    }
     fun cancelSetup() { _setup.value = null }
 
     private fun action(block: suspend () -> Unit) = viewModelScope.launch {
@@ -130,7 +139,7 @@ fun SecurityScreen(session: SessionViewModel, onBack: () -> Unit, snack: (String
                     Spacer(Modifier.height(10.dp))
                     XyonButton("Copiar", { copy(ctx, list.joinToString("\n")); snack("Copiados") }, Modifier.fillMaxWidth(), style = XyonButtonStyle.Light, icon = Icons.Filled.ContentCopy, showArrow = false)
                     Spacer(Modifier.height(8.dp))
-                    XyonButton("Ya los he guardado", { vm.doneWithCodes() }, Modifier.fillMaxWidth())
+                    XyonButton("Ya los he guardado", { vm.doneWithCodes(session) }, Modifier.fillMaxWidth())
                 }
             }
 

@@ -114,6 +114,9 @@ class SessionViewModel @Inject constructor(
         Background.startNotifications(appCtx)
     }
 
+    /** Saves only the new token (the previous one was revoked); the user is updated later. */
+    fun renewToken(r: AuthResponse) = viewModelScope.launch { r.token?.let { store.saveToken(it) } }
+
     /** Stores a renewed session (password change, MFA on/off) without leaving the current screen. */
     fun renewSession(r: AuthResponse) = viewModelScope.launch {
         r.token?.let { store.saveToken(it) }
