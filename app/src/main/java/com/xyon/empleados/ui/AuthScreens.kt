@@ -1,5 +1,6 @@
 package com.xyon.empleados.ui
 
+import com.xyon.empleados.ui.HapticCheckbox
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
@@ -150,7 +151,7 @@ fun LoginScreen(vm: SessionViewModel, onRegister: () -> Unit, onForgot: () -> Un
         XField(pass, { pass = it }, "Contraseña", password = true, leading = Icons.Filled.Lock)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { remember = !remember }, verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(remember, { remember = it }, colors = CheckboxDefaults.colors(checkedColor = x.blue, uncheckedColor = x.outline))
+                HapticCheckbox(remember, { remember = it }, colors = CheckboxDefaults.colors(checkedColor = x.blue, uncheckedColor = x.outline))
                 Text("Recordarme", color = x.ink, fontWeight = FontWeight.SemiBold)
             }
             Text("¿Olvidaste tu contraseña?", color = x.blue, fontWeight = FontWeight.Bold, fontSize = 14.sp,

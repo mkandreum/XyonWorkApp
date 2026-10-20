@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.xyon.empleados.ui.ProvideTapHaptics
 
 // ───────── Raw palette (Xyon blue stays the anchor, everything else is flat + saturated) ─────────
 val Primary50 = Color(0xFFEFF6FF)
@@ -140,7 +141,7 @@ fun XyonTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> 
     val x = if (dark) DarkXyon else LightXyon
     CompositionLocalProvider(LocalXyon provides x) {
         MaterialTheme(colorScheme = if (dark) DarkScheme else LightScheme, typography = Type, shapes = AppShapes) {
-            Surface(color = x.bg, contentColor = x.ink, content = content)
+            ProvideTapHaptics { Surface(color = x.bg, contentColor = x.ink, content = content) }
         }
     }
 }

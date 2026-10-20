@@ -49,6 +49,8 @@ fun HomeScreen(
     val busy by vm.busy.collectAsState()
     val pendingOffline by vm.pendingOffline.collectAsState()
     LaunchedEffect(Unit) { vm.events.collect { snack(it) } }
+    val view = androidx.compose.ui.platform.LocalView.current
+    LaunchedEffect(Unit) { vm.failed.collect { view.hapticReject() } }
     // Al volver del background (o regresar a Inicio) se relee el estado: si se fichó desde
     // la web u otro dispositivo, el botón no puede quedarse con el estado antiguo.
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current

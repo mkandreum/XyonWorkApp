@@ -1,5 +1,6 @@
 package com.xyon.empleados.ui.admin
 
+import com.xyon.empleados.ui.HapticSwitch
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -438,7 +439,7 @@ private fun TemplatesList(list: List<EmailTemplate>, vm: AdminSettingsVm) {
             XField(n, { n = it }, "Nombre"); XField(sub, { sub = it }, "Asunto")
             XField(body, { body = it }, "Cuerpo HTML", singleLine = false, minLines = 5)
             t.variables?.takeIf { it.isNotBlank() }?.let { Muted("Variables: $it") }
-            Row(verticalAlignment = Alignment.CenterVertically) { Switch(act, { act = it }); Spacer(Modifier.width(8.dp)); Text("Plantilla activa") }
+            Row(verticalAlignment = Alignment.CenterVertically) { HapticSwitch(act, { act = it }); Spacer(Modifier.width(8.dp)); Text("Plantilla activa") }
         }
     }
 }
@@ -482,7 +483,7 @@ fun AdminLayoutsScreen(onBack: () -> Unit, snack: (String) -> Unit, vm: AdminLay
                     GlassCard(Modifier.fillMaxWidth()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) { Text(l.name, style = MaterialTheme.typography.titleMedium); Muted("${l.widgets.size} widgets") }
-                            Switch(l.isActive, { vm.setActive(l.id, it) })
+                            HapticSwitch(l.isActive, { vm.setActive(l.id, it) })
                             IconAction(Icons.Filled.Delete, "Eliminar", danger = true) { del = l }
                         }
                         val ws = l.widgets.sortedBy { it.order }
@@ -492,7 +493,7 @@ fun AdminLayoutsScreen(onBack: () -> Unit, snack: (String) -> Unit, vm: AdminLay
                                     Text(w.label.ifBlank { w.type }, style = MaterialTheme.typography.bodyLarge)
                                     Muted("${w.type} · ${WIDGET_SCOPES.firstOrNull { it.first == w.scope }?.second ?: w.scope}")
                                 }
-                                Switch(w.isActive, { vm.toggleWidget(w) })
+                                HapticSwitch(w.isActive, { vm.toggleWidget(w) })
                                 IconAction(Icons.Filled.ArrowUpward, "Subir") { vm.move(l, i, -1) }
                                 IconAction(Icons.Filled.ArrowDownward, "Bajar") { vm.move(l, i, 1) }
                                 IconAction(Icons.Filled.Close, "Quitar", danger = true) { delW = w }
@@ -508,7 +509,7 @@ fun AdminLayoutsScreen(onBack: () -> Unit, snack: (String) -> Unit, vm: AdminLay
         var n by remember { mutableStateOf("") }; var a by remember { mutableStateOf(false) }
         FormDialog("Nuevo diseño", "Crear", n.isNotBlank(), { vm.create(n.trim(), a); creating = false }, { creating = false }) {
             XField(n, { n = it }, "Nombre")
-            Row(verticalAlignment = Alignment.CenterVertically) { Switch(a, { a = it }); Spacer(Modifier.width(8.dp)); Text("Activar ahora (desactiva los demás)") }
+            Row(verticalAlignment = Alignment.CenterVertically) { HapticSwitch(a, { a = it }); Spacer(Modifier.width(8.dp)); Text("Activar ahora (desactiva los demás)") }
         }
     }
     addTo?.let { l ->

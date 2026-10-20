@@ -241,6 +241,9 @@ class DashboardViewModel @Inject constructor(
     val events = _events.asSharedFlow()
     private val _justDone = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
     val justDone = _justDone.asSharedFlow()
+    /** A clock-in the server refused (or that failed): the screen answers with a "reject" buzz. */
+    private val _failed = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val failed = _failed.asSharedFlow()
 
     fun refreshAll() {
         status.refresh(); vacations.refresh(); balance.refresh(); news.refresh(); week.refresh(); warnings.refresh()
@@ -292,6 +295,7 @@ class DashboardViewModel @Inject constructor(
         }.onFailure { e ->
             val (code, message) = e.apiError()
             _events.tryEmit(message)
+            _failed.tryEmit(Unit)
             // Estado desfasado (fichó desde la web u otro móvil): releer el real al instante
             if (code == "SEQUENCE_MISMATCH") { status.refresh(); week.refresh() }
         }

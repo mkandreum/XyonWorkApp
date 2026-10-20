@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,6 +64,7 @@ fun FichajeHero(
     onToggle: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val press by animateFloatAsState(if (pressed) .88f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium), label = "press")
@@ -70,7 +72,7 @@ fun FichajeHero(
     val burst = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         successEvents.collect {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            view.hapticConfirm()
             burst.snapTo(0f); burst.animateTo(1f, tween(1000, easing = FastOutSlowInEasing))
         }
     }

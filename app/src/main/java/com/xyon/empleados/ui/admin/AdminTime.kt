@@ -1,5 +1,6 @@
 package com.xyon.empleados.ui.admin
 
+import com.xyon.empleados.ui.HapticSwitch
 import android.content.Intent
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -336,7 +337,7 @@ fun AdminShiftsScreen(onBack: () -> Unit, snack: (String) -> Unit, vm: AdminShif
             XField(outMorn, { outMorn = it }, "Salida mañana (turno partido, opcional)", error = if (!optOk(outMorn)) "HH:mm" else null)
             XField(inLate, { inLate = it }, "Entrada tarde (turno partido, opcional)", error = if (!optOk(inLate)) "HH:mm" else null)
             XField(tol, { tol = it }, "Tolerancia (minutos)", keyboard = androidx.compose.ui.text.input.KeyboardType.Number)
-            Row(verticalAlignment = Alignment.CenterVertically) { Switch(flex, { flex = it }); Spacer(Modifier.width(8.dp)); Text("Horario flexible") }
+            Row(verticalAlignment = Alignment.CenterVertically) { HapticSwitch(flex, { flex = it }); Spacer(Modifier.width(8.dp)); Text("Horario flexible") }
         }
     }
     del?.let { ConfirmDialog("¿Eliminar el turno ${it.name} de ${it.department}? Se borrarán sus asignaciones.", onConfirm = { vm.delete(it.id) }, onDismiss = { del = null }) }

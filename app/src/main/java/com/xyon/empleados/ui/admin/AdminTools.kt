@@ -1,5 +1,6 @@
 package com.xyon.empleados.ui.admin
 
+import com.xyon.empleados.ui.HapticSwitch
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -117,7 +118,7 @@ fun AdminImportScreen(onBack: () -> Unit, snack: (String) -> Unit, vm: AdminImpo
                 item {
                     GlassCard(Modifier.fillMaxWidth()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Switch(invites, { invites = it }, enabled = done == null)
+                            HapticSwitch(invites, { invites = it }, enabled = done == null)
                             Spacer(Modifier.width(8.dp)); Text("Enviar invitaciones por email")
                         }
                         Spacer(Modifier.height(8.dp))
@@ -264,7 +265,7 @@ fun AdminOverridesScreen(admin: Boolean, myDept: String, onBack: () -> Unit, sna
         }) {
             Muted(if (targetUid != null) "Aplica a ${people.data?.firstOrNull { it.id == targetUid }?.name ?: "el empleado"} y prevalece sobre el departamento." else "Aplica a todo el departamento $dept.")
             DateField("Fecha", date, { date = it })
-            Row(verticalAlignment = Alignment.CenterVertically) { Switch(dayOff, { dayOff = it }); Spacer(Modifier.width(8.dp)); Text("Día libre") }
+            Row(verticalAlignment = Alignment.CenterVertically) { HapticSwitch(dayOff, { dayOff = it }); Spacer(Modifier.width(8.dp)); Text("Día libre") }
             if (!dayOff) {
                 XField(inT, { inT = it }, "Entrada (HH:mm)", error = if (!optOk(inT)) "HH:mm" else null)
                 XField(outT, { outT = it }, "Salida (HH:mm)", error = if (!optOk(outT)) "HH:mm" else null)

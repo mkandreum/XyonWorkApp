@@ -1,5 +1,6 @@
 package com.xyon.empleados.ui
 
+import com.xyon.empleados.ui.HapticSwitch
 import androidx.activity.result.contract.ActivityResultContracts
 
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -247,7 +248,7 @@ fun ProfileScreen(
                     Text("Recordatorios de fichaje")
                     Text("Aviso 5 minutos antes del inicio de tu turno", color = x.inkSoft, style = MaterialTheme.typography.bodyMedium)
                 }
-                Switch(reminders, { on -> reminders = on; Reminders.setEnabled(ctx, on) },
+                HapticSwitch(reminders, { on -> reminders = on; Reminders.setEnabled(ctx, on) },
                     colors = SwitchDefaults.colors(checkedTrackColor = x.blue, checkedThumbColor = Lime))
             }
             // Special access that existing users may need to grant after Android 14.
@@ -270,7 +271,7 @@ fun ProfileScreen(
                     Text("Bloqueo con huella")
                     Text("Al volver a la app y al abrir nóminas", color = x.inkSoft, style = MaterialTheme.typography.bodyMedium)
                 }
-                Switch(bio, { onEnableBiometric(it) }, colors = SwitchDefaults.colors(checkedTrackColor = x.blue, checkedThumbColor = Lime))
+                HapticSwitch(bio, { onEnableBiometric(it) }, colors = SwitchDefaults.colors(checkedTrackColor = x.blue, checkedThumbColor = Lime))
             }
             NavRow(Icons.Filled.Password, "Cambiar contraseña", { pwd = true })
             NavRow(Icons.Filled.Security, "Seguridad y tus datos", onSecurity)

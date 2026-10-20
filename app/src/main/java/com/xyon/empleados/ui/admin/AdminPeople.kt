@@ -1,5 +1,7 @@
 package com.xyon.empleados.ui.admin
 
+import com.xyon.empleados.ui.HapticSwitch
+import com.xyon.empleados.ui.HapticCheckbox
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -247,7 +249,7 @@ fun AdminDepartmentsScreen(onBack: () -> Unit, snack: (String) -> Unit, vm: Admi
             XField(lat, { lat = it }, "Latitud", keyboard = androidx.compose.ui.text.input.KeyboardType.Decimal)
             XField(lng, { lng = it }, "Longitud", keyboard = androidx.compose.ui.text.input.KeyboardType.Decimal)
             XField(dist, { dist = it }, "Distancia máxima (m)", keyboard = androidx.compose.ui.text.input.KeyboardType.Number)
-            Row(verticalAlignment = Alignment.CenterVertically) { Switch(req, { req = it }); Spacer(Modifier.width(8.dp)); Text("GPS obligatorio para fichar") }
+            Row(verticalAlignment = Alignment.CenterVertically) { HapticSwitch(req, { req = it }); Spacer(Modifier.width(8.dp)); Text("GPS obligatorio para fichar") }
             if (o != null) TextButton({ vm.deleteOffice(d); gps = null }) { Text("Quitar ubicación", color = com.xyon.empleados.ui.theme.Danger) }
         }
     }
@@ -309,14 +311,14 @@ fun AdminRequestsScreen(kind: String, manager: Boolean, onBack: () -> Unit, snac
                 if (actionable.size > 1) item {
                     val all = actionable.all { it.id in selected }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(all, { selected = if (all) emptySet() else actionable.map { it.id }.toSet() })
+                        HapticCheckbox(all, { selected = if (all) emptySet() else actionable.map { it.id }.toSet() })
                         Text("Seleccionar las ${actionable.size} pendientes", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
                     }
                 }
                 items(list, key = { it.id }) { v ->
                     XyonCard(Modifier.fillMaxWidth(), accent = if (v.id in selected) Lime else null) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (canAct(v)) Checkbox(v.id in selected, { on -> selected = if (on) selected + v.id else selected - v.id })
+                            if (canAct(v)) HapticCheckbox(v.id in selected, { on -> selected = if (on) selected + v.id else selected - v.id })
                             Column(Modifier.weight(1f)) {
                                 Text(v.user?.name ?: "—", style = MaterialTheme.typography.titleMedium)
                                 Muted("${typeLabel(v.type)}${v.subtype?.let { " · $it" } ?: ""} · ${v.user?.department ?: ""}")
