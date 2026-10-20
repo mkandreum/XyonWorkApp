@@ -17,8 +17,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Login
-import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -121,7 +121,7 @@ fun FichajeHero(
             }
             Box(
                 Modifier.size(200.dp).clip(CircleShape)
-                    .clickable(interaction, null, enabled = !busy) {
+                    .clickable(interaction, null, enabled = !busy, role = Role.Button) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onToggle()
                     },
                 contentAlignment = Alignment.Center,
@@ -129,7 +129,7 @@ fun FichajeHero(
                 if (busy) CircularProgressIndicator(color = InkBlack, modifier = Modifier.size(36.dp))
                 else AnimatedContent(clockedIn, label = "lbl", transitionSpec = { (scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn()) togetherWith (scaleOut() + fadeOut()) }) { inn ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(if (inn) Icons.Filled.Logout else Icons.Filled.Login, null, tint = InkBlack, modifier = Modifier.size(38.dp))
+                        Icon(if (inn) Icons.AutoMirrored.Filled.Logout else Icons.AutoMirrored.Filled.Login, null, tint = InkBlack, modifier = Modifier.size(38.dp))
                         Text(if (inn) "SALIDA" else "ENTRADA", color = InkBlack, fontWeight = FontWeight.Black, fontSize = 24.sp, letterSpacing = (-.5).sp)
                     }
                 }
@@ -175,7 +175,8 @@ fun WorkModeSwitch(value: String, enabled: Boolean, onChange: (String) -> Unit) 
                 Row(
                     Modifier.weight(1f).fillMaxHeight().clip(CircleShape)
                         .selectable(selected, enabled = enabled && !selected, role = Role.RadioButton) {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onChange(key)
+                            // The default indication of selectable already ticks (see ProvideTapHaptics)
+                            onChange(key)
                         },
                     horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                 ) {

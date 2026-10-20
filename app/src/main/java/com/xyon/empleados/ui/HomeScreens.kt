@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -255,7 +256,7 @@ private fun AttendanceAlert(list: List<AttendanceWarning>, modifier: Modifier = 
                     w.manager?.name?.let { Text(it, color = InkBlack.copy(alpha = .7f), style = MaterialTheme.typography.labelSmall) }
                 }
                 Text("Justificar", color = Color.White, fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.clip(CircleShape).background(InkBlack).clickable { onJustify(w) }.padding(horizontal = 14.dp, vertical = 9.dp))
+                    modifier = Modifier.clip(CircleShape).background(InkBlack).clickable(role = Role.Button) { onJustify(w) }.padding(horizontal = 14.dp, vertical = 9.dp))
             }
         }
         if (list.size > 3) Text("… y ${list.size - 3} más", color = InkBlack, fontWeight = FontWeight.SemiBold)

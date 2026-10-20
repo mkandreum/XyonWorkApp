@@ -9,8 +9,11 @@ import java.time.LocalDate
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-/** An ENTRADA→SALIDA pair of a day. An entry with no exit yet is open (`salida == null`). */
-data class EntryPair(val entrada: Fichaje, val salida: Fichaje?, val hours: Double)
+/**
+ * An ENTRADA→SALIDA pair of a day. An entry with no exit yet is open (`salida == null`); an exit
+ * with no entry (`entrada == null`) closes a night shift that started the previous day.
+ */
+data class EntryPair(val entrada: Fichaje?, val salida: Fichaje?, val hours: Double)
 
 /**
  * Pure calendar figures (worked vs scheduled hours, live hours of an open entry, pairs, unresolved
@@ -19,6 +22,9 @@ data class EntryPair(val entrada: Fichaje, val salida: Fichaje?, val hours: Doub
 object CalendarMath {
     /** Full-time day, used when the server has no schedule for a day. */
     const val DEFAULT_DAILY_HOURS = 8.0
+
+    /** Same margin as the server (OPEN_ENTRY_MAX_HOURS): a younger open entry is a shift in progress. */
+    const val OPEN_ENTRY_MAX_HOURS = 16
 
     private fun minutes(hhmm: String?): Int? {
         val parts = hhmm?.split(":") ?: return null
@@ -47,18 +53,25 @@ object CalendarMath {
         return if (day.dayOfWeek.value >= 6) 0.0 else DEFAULT_DAILY_HOURS
     }
 
+    /** The day's last fichaje when it is an entry still in progress (also a night shift started yesterday). */
+    fun liveEntry(stats: FichajeDayStats?, nowMillis: Long): Fichaje? {
+        val last = stats?.fichajes?.lastOrNull()?.takeIf { it.tipo == "ENTRADA" } ?: return null
+        val age = nowMillis - (epoch(last.timestamp) ?: return null)
+        return last.takeIf { age > 0 && age <= OPEN_ENTRY_MAX_HOURS * 3_600_000L }
+    }
+
     /**
-     * Worked hours of a day. The server only adds closed pairs, so today's open entry is counted up
-     * to [nowMillis]; otherwise the day would show 0 until the clock-out.
+     * Worked hours of a day. The server only adds closed pairs, so a live open entry is counted up to
+     * [nowMillis] (or to midnight when it started on an earlier day: the rest belongs to the next day).
      */
     fun workedHours(stats: FichajeDayStats?, nowMillis: Long, isToday: Boolean): Double {
         if (stats == null) return 0.0
-        val last = stats.fichajes.lastOrNull()
-        if (isToday && last?.tipo == "ENTRADA") {
-            val since = epoch(last.timestamp)
-            if (since != null && nowMillis > since) return stats.horasTrabajadas + (nowMillis - since) / 3_600_000.0
-        }
-        return stats.horasTrabajadas
+        val open = liveEntry(stats, nowMillis) ?: return stats.horasTrabajadas
+        val since = epoch(open.timestamp) ?: return stats.horasTrabajadas
+        val startDay = Instant.ofEpochMilli(since).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        val midnight = startDay.plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val end = minOf(nowMillis, midnight)
+        return stats.horasTrabajadas + max(0L, end - since) / 3_600_000.0
     }
 
     /** "8:34" (calendar cells). */
@@ -81,7 +94,16 @@ object CalendarMath {
         var i = 0
         while (i < sorted.size) {
             val f = sorted[i]
-            if (f.tipo != "ENTRADA") { i++; continue }
+            if (f.tipo != "ENTRADA") {
+                // Exit with no entry earlier the same day: it closes yesterday's night shift
+                if (i == 0) {
+                    val t = epoch(f.timestamp) ?: 0L
+                    val midnight = Instant.ofEpochMilli(t).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                        .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    out += EntryPair(null, f, max(0L, t - midnight) / 3_600_000.0)
+                }
+                i++; continue
+            }
             val next = sorted.getOrNull(i + 1)?.takeIf { it.tipo == "SALIDA" }
             val start = epoch(f.timestamp) ?: 0L
             val end = next?.let { epoch(it.timestamp) } ?: nowMillis
@@ -98,8 +120,10 @@ object CalendarMath {
      * A day needs action when it has a late arrival, an early departure or an entry left open on a
      * past day, and no adjustment request (pending or approved) already covers its records.
      */
-    fun hasUnresolvedIssue(stats: FichajeDayStats?, adjustments: List<FichajeAdjustment>, isToday: Boolean): Boolean {
+    fun hasUnresolvedIssue(stats: FichajeDayStats?, adjustments: List<FichajeAdjustment>, isToday: Boolean, nowMillis: Long = System.currentTimeMillis()): Boolean {
         if (stats == null || stats.fichajes.isEmpty()) return false
+        // A shift still in progress (e.g. started last night) is not an incident yet
+        if (liveEntry(stats, nowMillis) != null) return false
         val incomplete = !isToday && !stats.isComplete
         if (!(stats.isLate || stats.isEarlyDeparture || incomplete)) return false
         return !covered(stats, adjustments)

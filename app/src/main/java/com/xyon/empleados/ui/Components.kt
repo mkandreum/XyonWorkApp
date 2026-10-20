@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -190,7 +191,7 @@ fun XyonCard(
     Column(
         modifier.scale(s).clip(shape)
             .background(container ?: x.card)
-            .let { if (onClick != null) it.clickable(interaction, null, onClick = onClick) else it }
+            .let { if (onClick != null) it.clickable(interaction, null, role = Role.Button, onClick = onClick) else it }
             .drawBehind {
                 if (accent != null) drawSparkle(Offset(size.width - 26.dp.toPx(), 26.dp.toPx()), 13.dp.toPx(), accent, 0f)
             }
@@ -287,7 +288,7 @@ fun XyonButton(
     Row(
         modifier.graphicsLayer { scaleX = sx; scaleY = sy }.heightIn(min = 58.dp).clip(CircleShape).background(fill)
             .let { if (style == XyonButtonStyle.Light) it.border(1.5.dp, x.outline, CircleShape) else it }
-            .clickable(interaction, null, enabled = enabled && !loading) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onClick() }
+            .clickable(interaction, null, enabled = enabled && !loading, role = Role.Button) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onClick() }
             .padding(start = 26.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -413,7 +414,7 @@ fun ScreenHeader(title: String, subtitle: String? = null, onBack: (() -> Unit)? 
     Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) {
             Box(
-                Modifier.padding(end = 12.dp).size(46.dp).clip(CircleShape).background(x.card).border(1.5.dp, x.outline, CircleShape).clickable(onClick = onBack),
+                Modifier.padding(end = 12.dp).size(46.dp).clip(CircleShape).background(x.card).border(1.5.dp, x.outline, CircleShape).clickable(role = Role.Button, onClick = onBack),
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", tint = x.ink) }
         }

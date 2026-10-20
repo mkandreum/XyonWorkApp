@@ -90,6 +90,8 @@ interface Api {
     @GET("late-notifications") suspend fun lateNotifications(): List<AttendanceWarning>
     @POST("late-notifications/{id}/justify") suspend fun justifyLate(@Path("id") id: String, @Body b: JustifyLateRequest): AttendanceWarning
     @POST("fichaje-adjustments") suspend fun createAdjustment(@Body b: CreateAdjustmentRequest): FichajeAdjustment
+    /** Reminds the reviewers of one of my pending requests (the server allows one every 12 h). */
+    @POST("fichaje-adjustments/{id}/remind") suspend fun remindAdjustment(@Path("id") id: String): ResponseBody
     @GET("fichaje-adjustments") suspend fun myAdjustments(): List<FichajeAdjustment>
 
     // Manager

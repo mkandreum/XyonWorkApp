@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -101,8 +102,8 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
         val has = stats != null && stats.fichajes.isNotEmpty()
         return DayInfo(
             date = day, stats = stats, isToday = isToday, absence = absence, worked = worked, expected = expected, hasRecords = has,
-            live = isToday && has && stats!!.fichajes.last().tipo == "ENTRADA",
-            issue = CalendarMath.hasUnresolvedIssue(stats, requests, isToday),
+            live = CalendarMath.liveEntry(stats, nowMillis) != null,
+            issue = CalendarMath.hasUnresolvedIssue(stats, requests, isToday, nowMillis),
             overtime = CalendarMath.isOvertime(worked, expected),
             missed = !has && absence == null && expected > 0 && day.isBefore(today),
         )
@@ -209,6 +210,7 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
                 onClose = { sheetOpen = false },
                 onClockNow = { sheetOpen = false; onGoHome() },
                 onAdjust = { adjustFor = it },
+                onRemind = { vm.remind(it.id) },
                 onRequestExit = { requestExitFor = it },
             )
         }
@@ -259,7 +261,7 @@ private fun DayCell(info: DayInfo, selected: Boolean, hasEvent: Boolean, hasTeam
     }
     Column(
         modifier.height(56.dp).clip(shape).background(bg).border(stroke, shape)
-            .clickable(onClick = onClick).padding(horizontal = 6.dp, vertical = 5.dp)
+            .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 6.dp, vertical = 5.dp)
             .semantics { contentDescription = label },
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -334,13 +336,14 @@ private fun SummaryTile(label: String, value: String, bg: Color, fg: Color, modi
 private fun DaySheet(
     info: DayInfo, requests: List<FichajeAdjustment>, nowMillis: Long,
     events: List<EventItem>, mine: List<VacationRequest>, teamVac: List<VacationRequest>,
-    onClose: () -> Unit, onClockNow: () -> Unit, onAdjust: (Fichaje) -> Unit, onRequestExit: (Fichaje) -> Unit,
+    onClose: () -> Unit, onClockNow: () -> Unit, onAdjust: (Fichaje) -> Unit, onRemind: (FichajeAdjustment) -> Unit, onRequestExit: (Fichaje) -> Unit,
 ) {
     val x = Xyon.colors
     val stats = info.stats
     val pairs = CalendarMath.pairs(stats?.fichajes.orEmpty(), nowMillis)
-    val openEntry = pairs.lastOrNull()?.takeIf { it.salida == null }?.entrada
-    val canRequestExit = openEntry != null && !info.date.isAfter(LocalDate.now())
+    val openEntry = pairs.lastOrNull()?.takeIf { it.entrada != null && it.salida == null }?.entrada
+    // A shift still in progress is not a forgotten exit: no exit request or "incomplete" tag for it
+    val canRequestExit = openEntry != null && !info.live && !info.date.isAfter(LocalDate.now())
     Column(
         Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -353,7 +356,7 @@ private fun DaySheet(
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (stats.isLate) StatusChip("Retraso", Tone.Warning)
                 if (stats.isEarlyDeparture) StatusChip("Salida anticipada", Tone.Warning)
-                if (stats.fichajes.isNotEmpty() && !info.isToday && !stats.isComplete) StatusChip("Registro incompleto", Tone.Warning)
+                if (stats.fichajes.isNotEmpty() && !info.isToday && !info.live && !stats.isComplete) StatusChip("Registro incompleto", Tone.Warning)
                 stats.turno?.label?.let { StatusChip(it, Tone.Info) }
             }
             stats.daySchedule?.let { s ->
@@ -371,7 +374,7 @@ private fun DaySheet(
             }
         }
 
-        pairs.forEach { p -> SessionCard(p, requests, onAdjust) }
+        pairs.forEach { p -> SessionCard(p, requests, onAdjust, onRemind) }
 
         if (canRequestExit) {
             TextButton({ onRequestExit(openEntry!!) }) {
@@ -411,9 +414,9 @@ private fun DaySheet(
 
 /** One ENTRADA→SALIDA session: times (tap to ask for an adjustment), duration and request status. */
 @Composable
-private fun SessionCard(p: EntryPair, requests: List<FichajeAdjustment>, onAdjust: (Fichaje) -> Unit) {
+private fun SessionCard(p: EntryPair, requests: List<FichajeAdjustment>, onAdjust: (Fichaje) -> Unit, onRemind: (FichajeAdjustment) -> Unit) {
     val x = Xyon.colors
-    val reqIn = requests.firstOrNull { it.fichajeId == p.entrada.id }
+    val reqIn = p.entrada?.let { e -> requests.firstOrNull { it.fichajeId == e.id } }
     val reqOut = p.salida?.let { s -> requests.firstOrNull { it.fichajeId == s.id } }
     val request = reqIn ?: reqOut
     val pending = request?.status == "PENDING"
@@ -422,7 +425,8 @@ private fun SessionCard(p: EntryPair, requests: List<FichajeAdjustment>, onAdjus
         Box(Modifier.width(5.dp).fillMaxHeight().background(accent))
         Column(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TimeButton(p.entrada, reqIn, onAdjust)
+                if (p.entrada != null) TimeButton(p.entrada, reqIn, onAdjust)
+                else Text("Turno de ayer", color = x.inkSoft, fontWeight = FontWeight.ExtraBold)
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = x.inkSoft, modifier = Modifier.padding(horizontal = 8.dp).size(16.dp))
                 if (p.salida != null) TimeButton(p.salida, reqOut, onAdjust)
                 else Row(verticalAlignment = Alignment.CenterVertically) {
@@ -441,7 +445,16 @@ private fun SessionCard(p: EntryPair, requests: List<FichajeAdjustment>, onAdjus
                     "APPROVED" -> "Ajuste aprobado" to Tone.Success
                     else -> "Ajuste rechazado" to Tone.Danger
                 }
-                StatusChip(text, tone, Modifier.padding(top = 8.dp))
+                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    StatusChip(text, tone)
+                    if (it.status == "PENDING") {
+                        TextButton({ onRemind(it) }) {
+                            Icon(Icons.Filled.NotificationsActive, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Recordar al responsable", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.ExtraBold)
+                        }
+                    }
+                }
             }
         }
     }
@@ -455,7 +468,7 @@ private fun TimeButton(f: Fichaje, request: FichajeAdjustment?, onAdjust: (Ficha
     val time = fmtTimeOf(f.timestamp)
     Row(
         Modifier.clip(RoundedCornerShape(10.dp))
-            .then(if (canAdjust) Modifier.clickable { onAdjust(f) }.semantics { contentDescription = "Solicitar ajuste del fichaje de $time" } else Modifier)
+            .then(if (canAdjust) Modifier.clickable(role = Role.Button) { onAdjust(f) }.semantics { contentDescription = "Solicitar ajuste del fichaje de $time" } else Modifier)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

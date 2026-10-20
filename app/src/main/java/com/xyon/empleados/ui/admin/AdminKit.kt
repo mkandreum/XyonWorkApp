@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -90,7 +91,7 @@ fun Dropdown(label: String, value: String, options: List<Pair<String, String>>, 
     Box(modifier.fillMaxWidth()) {
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(1.dp, GlassStroke, RoundedCornerShape(16.dp))
-                .clickable { open = true }.padding(horizontal = 16.dp, vertical = 10.dp),
+                .clickable(role = Role.Button) { open = true }.padding(horizontal = 16.dp, vertical = 10.dp),
         ) {
             Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -110,7 +111,7 @@ fun DateField(label: String, value: String, onChange: (String) -> Unit, modifier
     var open by remember { mutableStateOf(false) }
     Column(
         modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(1.dp, GlassStroke, RoundedCornerShape(16.dp))
-            .clickable { open = true }.padding(horizontal = 16.dp, vertical = 10.dp),
+            .clickable(role = Role.Button) { open = true }.padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -153,12 +154,12 @@ fun IconAction(icon: ImageVector, desc: String, danger: Boolean = false, onClick
 
 @Composable
 fun ApproveRejectRow(onApprove: () -> Unit, onReject: () -> Unit) {
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    // Material buttons draw the default indication, so the theme already buzzes on each tap
     Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button({ haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); onApprove() }, colors = ButtonDefaults.buttonColors(containerColor = Lime, contentColor = InkBlack)) {
+        Button(onApprove, colors = ButtonDefaults.buttonColors(containerColor = Lime, contentColor = InkBlack)) {
             Icon(Icons.Filled.Check, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Aprobar", fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold)
         }
-        OutlinedButton({ haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove); onReject() }, border = androidx.compose.foundation.BorderStroke(1.5.dp, Xyon.colors.outline)) {
+        OutlinedButton(onReject, border = androidx.compose.foundation.BorderStroke(1.5.dp, Xyon.colors.outline)) {
             Text("Rechazar", color = Xyon.colors.ink, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
         }
     }

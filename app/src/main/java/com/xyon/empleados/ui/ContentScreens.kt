@@ -13,11 +13,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -161,7 +164,7 @@ fun PayrollScreen(onBack: (() -> Unit)?, vm: PayrollViewModel = hiltViewModel(),
                         StatPill(
                             if (diff == null) "Última" else "vs. anterior",
                             if (diff == null) money(last.amount) else "%+.1f%%".format(diff),
-                            if (diff != null && diff < 0) Icons.Filled.TrendingDown else Icons.Filled.TrendingUp,
+                            if (diff != null && diff < 0) Icons.AutoMirrored.Filled.TrendingDown else Icons.AutoMirrored.Filled.TrendingUp,
                             if (diff != null && diff < 0) Coral else Lilac, Modifier.weight(1f),
                         )
                     }
@@ -324,7 +327,7 @@ private fun InfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label
 @Composable
 fun NavRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, tint: androidx.compose.ui.graphics.Color = Color.Unspecified) {
     val x = Xyon.colors
-    Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable(onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable(role = Role.Button, onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = if (tint == Color.Unspecified) x.blue else tint); Spacer(Modifier.width(14.dp)); Text(label, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
         Icon(Icons.Filled.ChevronRight, null, tint = x.inkSoft)
     }

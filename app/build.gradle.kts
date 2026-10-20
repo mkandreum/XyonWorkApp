@@ -22,8 +22,8 @@ android {
         applicationId = "com.xyon.empleados"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "7.5"
+        versionCode = 13
+        versionName = "7.6"
         // Override with -PapiBaseUrl=https://your.domain/api/  (HTTPS only; cleartext is blocked)
         val base = (project.findProperty("apiBaseUrl") as String?) ?: "https://work.xyoncloud.win/api/"
         buildConfigField("String", "API_BASE_URL", "\"$base\"")

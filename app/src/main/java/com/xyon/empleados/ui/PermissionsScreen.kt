@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -158,7 +159,7 @@ private fun PermCard(
             }
         } else {
             Text(actionLabel, color = x.bg, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp,
-                modifier = Modifier.clip(CircleShape).background(x.ink).clickable(onClick = onAsk).padding(horizontal = 14.dp, vertical = 10.dp))
+                modifier = Modifier.clip(CircleShape).background(x.ink).clickable(role = Role.Button, onClick = onAsk).padding(horizontal = 14.dp, vertical = 10.dp))
         }
     }
 }

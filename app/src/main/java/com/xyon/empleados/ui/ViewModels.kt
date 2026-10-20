@@ -355,6 +355,14 @@ class CalendarViewModel @Inject constructor(private val api: Api, lf: LoaderFact
         if (!force && _days.value.containsKey(ym)) return@launch
         safeCall { api.fichajeMonth(me.id(), ym.year, ym.monthValue) }
             .onSuccess { list -> _days.update { it + (ym to list) } }
+            // Not cached as loaded, so the next visit to the month tries again
+            .onFailure { _msg.tryEmit("No se pudieron cargar tus fichajes de ${monthName(ym.monthValue).lowercase()}: ${it.userMessage()}") }
+    }
+
+    fun remind(id: String) = viewModelScope.launch {
+        safeCall { api.remindAdjustment(id) }
+            .onSuccess { _msg.tryEmit("Hemos recordado la solicitud a tu responsable") }
+            .onFailure { _msg.tryEmit(it.userMessage()) }
     }
 
     fun requestAdjustment(r: CreateAdjustmentRequest) = viewModelScope.launch {

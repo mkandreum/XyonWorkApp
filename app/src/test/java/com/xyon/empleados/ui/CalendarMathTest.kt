@@ -46,8 +46,8 @@ class CalendarMathTest {
         val stats = day(f("1", "ENTRADA", "2026-10-20T05:00:00Z"), hours = 0.0)
         val now = at("2026-10-20T07:30:00Z")
         assertEquals(2.5, CalendarMath.workedHours(stats, now, isToday = true), 0.0001)
-        // On a past day the open entry is not extended
-        assertEquals(0.0, CalendarMath.workedHours(stats, now, isToday = false), 0.0)
+        // A forgotten exit (entry older than the shift margin) is not extended
+        assertEquals(0.0, CalendarMath.workedHours(stats, at("2026-10-21T10:00:00Z"), isToday = false), 0.0)
     }
 
     @Test fun workedHoursAddsOpenEntryToClosedPairs() {
@@ -78,6 +78,25 @@ class CalendarMathTest {
         assertEquals(4.0, pairs[0].hours, 0.0001)
         assertNull(pairs[1].salida)
         assertEquals(1.0, pairs[1].hours, 0.0001)
+    }
+
+    @Test fun nightShiftStartedYesterdayIsLiveAndNotAnIncident() {
+        // Entry yesterday 22:00; now it is 01:00 (3 h later): still the same shift
+        val stats = day(f("a", "ENTRADA", "2026-10-19T22:00:00Z"), complete = false)
+        val now = at("2026-10-20T01:00:00Z")
+        assertEquals("a", CalendarMath.liveEntry(stats, now)?.id)
+        assertFalse(CalendarMath.hasUnresolvedIssue(stats, emptyList(), isToday = false, nowMillis = now))
+        // 20 h later it is a forgotten exit
+        val later = at("2026-10-20T18:00:00Z")
+        assertNull(CalendarMath.liveEntry(stats, later))
+        assertTrue(CalendarMath.hasUnresolvedIssue(stats, emptyList(), isToday = false, nowMillis = later))
+    }
+
+    @Test fun exitWithoutEntryClosesYesterdaysShift() {
+        val pairs = CalendarMath.pairs(listOf(f("b", "SALIDA", "2026-10-20T06:00:00Z")), at("2026-10-20T07:00:00Z"))
+        assertEquals(1, pairs.size)
+        assertNull(pairs[0].entrada)
+        assertEquals("b", pairs[0].salida?.id)
     }
 
     @Test fun lateDayIsUnresolvedUntilAnAdjustmentCoversIt() {

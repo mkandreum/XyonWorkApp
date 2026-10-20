@@ -2,6 +2,21 @@
 
 Notas de arquitectura, decisiones y cambios. Añadir una entrada por sesión.
 
+## 2026-10-20 — Auditoría de herramientas (7.6)
+
+- **Turnos de noche**: `CalendarMath.liveEntry` (una entrada abierta de menos de 16 h es un turno en curso, también el de ayer),
+  `pairs` admite la salida que cierra el turno de ayer (`entrada == null`, «Turno de ayer») y un turno en curso ya no se marca
+  como incidencia ni ofrece «Solicitar salida». Tests nuevos en `CalendarMathTest`.
+- **Recordar al responsable**: `Api.remindAdjustment` + `CalendarViewModel.remind`; botón en la hoja del día para solicitudes
+  pendientes (el servidor limita a un aviso cada 12 h).
+- **Accesibilidad**: rol de botón/casilla en los elementos pulsables que no lo tenían (TalkBack los anuncia).
+- **Vibración**: sin doble toque en «Aprobar/Rechazar» ni en el interruptor Oficina/Casa; los iconos obsoletos (Login, Logout,
+  TrendingUp/Down, OpenInNew) pasan a `AutoMirrored`.
+- **Calendario**: si falla la carga del mes ahora se avisa (antes fallaba en silencio).
+- Contrato con el backend: las 143 llamadas de Retrofit tienen ruta (`npm run audit:api ../XyonWorkApp` en XyonWork).
+
+Verificación: `testDebugUnitTest` + `bundleRelease`/`assembleRelease` firmados (7.6, versionCode 13).
+
 ## 2026-10-20 — Calendario rediseñado (7.5) y vibración (7.4)
 
 - **Calendario** (`ui/CalendarScreen.kt`, antes en `RequestScreens.kt`): celdas redondeadas con las horas del día, triángulo de

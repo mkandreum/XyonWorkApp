@@ -8,6 +8,7 @@ import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -154,7 +155,7 @@ fun SecurityScreen(session: SessionViewModel, onBack: () -> Unit, snack: (String
                     XyonButton("Abrir app autenticadora", {
                         runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(su.otpauthUri))) }
                             .onFailure { snack("No hay app autenticadora instalada. Usa la clave manual.") }
-                    }, Modifier.fillMaxWidth(), style = XyonButtonStyle.Light, icon = Icons.Filled.OpenInNew, showArrow = false)
+                    }, Modifier.fillMaxWidth(), style = XyonButtonStyle.Light, icon = Icons.AutoMirrored.Filled.OpenInNew, showArrow = false)
                     Text("Clave manual:", color = x.inkSoft, modifier = Modifier.padding(top = 10.dp))
                     Text(su.secret.chunked(4).joinToString(" "), fontFamily = FontFamily.Monospace, color = x.ink)
                     TextButton({ copy(ctx, su.secret); snack("Clave copiada") }) { Text("Copiar clave") }

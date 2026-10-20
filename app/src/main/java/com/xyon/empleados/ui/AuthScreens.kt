@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,7 +69,7 @@ private fun AuthShell(
                     Row(Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (onBack != null) {
                             Box(
-                                Modifier.padding(end = 12.dp).size(44.dp).clip(CircleShape).background(Color.White).clickable(onClick = onBack),
+                                Modifier.padding(end = 12.dp).size(44.dp).clip(CircleShape).background(Color.White).clickable(role = Role.Button, onClick = onBack),
                                 contentAlignment = Alignment.Center,
                             ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", tint = InkBlack) }
                         }
@@ -109,7 +110,7 @@ private fun FooterLink(prefix: String, action: String, onClick: () -> Unit) {
     val x = Xyon.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(prefix, color = x.inkSoft)
-        Text(action, color = x.blue, fontWeight = FontWeight.ExtraBold, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(6.dp))
+        Text(action, color = x.blue, fontWeight = FontWeight.ExtraBold, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onClick).padding(6.dp))
     }
 }
 
@@ -118,7 +119,7 @@ private fun FooterLink(prefix: String, action: String, onClick: () -> Unit) {
 private fun CompanyRow(onChange: () -> Unit) {
     val x = Xyon.colors
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(x.card).clickable(onClick = onChange).padding(horizontal = 14.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(x.card).clickable(role = Role.Button, onClick = onChange).padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Filled.Business, null, tint = x.inkSoft)
@@ -150,12 +151,12 @@ fun LoginScreen(vm: SessionViewModel, onRegister: () -> Unit, onForgot: () -> Un
         XField(email, { email = it }, "Correo electrónico", keyboard = KeyboardType.Email, leading = Icons.Filled.Email)
         XField(pass, { pass = it }, "Contraseña", password = true, leading = Icons.Filled.Lock)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { remember = !remember }, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Checkbox) { remember = !remember }, verticalAlignment = Alignment.CenterVertically) {
                 HapticCheckbox(remember, { remember = it }, colors = CheckboxDefaults.colors(checkedColor = x.blue, uncheckedColor = x.outline))
                 Text("Recordarme", color = x.ink, fontWeight = FontWeight.SemiBold)
             }
             Text("¿Olvidaste tu contraseña?", color = x.blue, fontWeight = FontWeight.Bold, fontSize = 14.sp,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onForgot).padding(6.dp))
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onForgot).padding(6.dp))
         }
         XyonButton("Iniciar sesión", { vm.doLogin(email, pass, remember) }, Modifier.fillMaxWidth(), enabled = email.isNotBlank() && pass.length >= 8, loading = busy)
     }
@@ -237,7 +238,7 @@ fun ForgotScreen(vm: SessionViewModel, onBack: () -> Unit, onHaveToken: () -> Un
             Text(
                 "Usar otro correo",
                 color = x.blue, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { sentTo = null }.padding(10.dp),
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button) { sentTo = null }.padding(10.dp),
             )
         }
     }
@@ -332,7 +333,7 @@ fun ConnectScreen(onDone: () -> Unit, onBack: (() -> Unit)?, vm: ConnectViewMode
         }, Modifier.fillMaxWidth(), style = XyonButtonStyle.Light, icon = Icons.Filled.QrCodeScanner, showArrow = false)
         if (!ServerConfig.isConfigured) {
             Text("Continuar con ${ServerConfig.host}", color = x.blue, fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(8.dp)).clickable { input = ServerConfig.host; vm.check(ServerConfig.host) }.padding(8.dp))
+                modifier = Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button) { input = ServerConfig.host; vm.check(ServerConfig.host) }.padding(8.dp))
         }
     }
 
