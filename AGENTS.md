@@ -1,4 +1,4 @@
-# AGENTS.md — XyonEmpleadosApp (Android nativo)
+# AGENTS.md — XyonWorkApp (Android nativo)
 
 ## Priority
 
@@ -9,9 +9,9 @@ getting approval.
 
 ## What this repo is
 
-Native Android client for XyonEmpleados: Kotlin 2.0, Jetpack Compose Material 3, Hilt,
+Native Android client for XyonWork: Kotlin 2.0, Jetpack Compose Material 3, Hilt,
 Retrofit + kotlinx.serialization, DataStore, WorkManager. Single `:app` module, package
-`com.xyon.empleados`. The web + backend repo is `XyonEmpleados`.
+`com.xyon.empleados`. The web + backend repo is `XyonWork`.
 
 ## Build and test
 

@@ -1,4 +1,4 @@
-# Agent notes — XyonEmpleadosApp (Android)
+# Agent notes — XyonWorkApp (Android)
 
 Notas de arquitectura, decisiones y cambios. Añadir una entrada por sesión.
 

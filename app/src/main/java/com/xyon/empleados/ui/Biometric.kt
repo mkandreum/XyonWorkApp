@@ -24,7 +24,7 @@ object AppLock {
 fun canAuthenticate(a: FragmentActivity) =
     BiometricManager.from(a).canAuthenticate(AUTH) == BiometricManager.BIOMETRIC_SUCCESS
 
-fun promptBiometric(a: FragmentActivity, title: String, onOk: () -> Unit, onFail: (String) -> Unit = {}, subtitle: String = "Xyon Empleados") {
+fun promptBiometric(a: FragmentActivity, title: String, onOk: () -> Unit, onFail: (String) -> Unit = {}, subtitle: String = "XyonWork") {
     AppLock.beginExternal()   // the PIN fallback opens a separate system screen
     val prompt = BiometricPrompt(a, ContextCompat.getMainExecutor(a), object : BiometricPrompt.AuthenticationCallback() {
         override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) { AppLock.endExternal(); onOk() }

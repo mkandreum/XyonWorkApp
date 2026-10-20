@@ -1,11 +1,11 @@
 ---
 name: xyon-android
-description: Work on the XyonEmpleados native Android app (Kotlin, Jetpack Compose, Hilt, Retrofit, WorkManager). Use for any change in this repository, especially fichajes, schedules, reminders/notifications, admin screens, builds and JVM tests.
+description: Work on the XyonWork native Android app (Kotlin, Jetpack Compose, Hilt, Retrofit, WorkManager). Use for any change in this repository, especially fichajes, schedules, reminders/notifications, admin screens, builds and JVM tests.
 ---
 
-# XyonEmpleados Android
+# XyonWork Android
 
-Native employee app for the XyonEmpleados platform. Single `:app` module, Kotlin 2.0,
+Native employee app for the XyonWork platform. Single `:app` module, Kotlin 2.0,
 Jetpack Compose Material 3, Hilt, Retrofit + kotlinx.serialization, DataStore and
 WorkManager. Package `com.xyon.empleados`.
 

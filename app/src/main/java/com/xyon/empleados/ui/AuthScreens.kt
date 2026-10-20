@@ -72,7 +72,7 @@ private fun AuthShell(
                         }
                         LogoTile(44.dp)
                         Spacer(Modifier.width(10.dp))
-                        Text("XyonEmpleados", color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp, letterSpacing = (-.6).sp)
+                        Text("XyonWork", color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp, letterSpacing = (-.6).sp)
                     }
 
                     AnimatedVisibility(shown, enter = fadeIn(tween(500)) + slideInVertically(spring(Spring.DampingRatioLowBouncy, Spring.StiffnessLow)) { it / 2 }) {

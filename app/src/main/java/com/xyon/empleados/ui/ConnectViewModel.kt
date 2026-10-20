@@ -63,7 +63,7 @@ class ConnectViewModel @Inject constructor(
     /** GET public/instance (servers ≥ 7.1); older servers only have public/logo. */
     private fun fetchInstance(r: ServerAddress.Result.Ok): Found {
         val obj = get(r.baseUrl + "public/instance") ?: get(r.baseUrl + "public/logo")
-            ?: throw IllegalStateException("!${r.host} no es un servidor de XyonEmpleados")
+            ?: throw IllegalStateException("!${r.host} no es un servidor de XyonWork")
         val name = (obj["name"] ?: obj["companyName"])?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         val logo = obj["logoUrl"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
             ?.let { if (it.startsWith("http")) it else r.baseUrl.removeSuffix("api/") + it.removePrefix("/") }
