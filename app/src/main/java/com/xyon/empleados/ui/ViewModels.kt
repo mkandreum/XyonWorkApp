@@ -232,6 +232,14 @@ class DashboardViewModel @Inject constructor(
     val balance = lf.create<UserBenefitsBalance>(viewModelScope, "balance") { api.myBalance() }
     val news = lf.create<List<NewsItem>>(viewModelScope, "news") { api.news() }
     val week = lf.create<List<FichajeDayStats>>(viewModelScope, "week") { api.fichajeWeek(me.id()) }
+    /** Last month's closing: the worker confirms the record of the month that just ended. */
+    private val lastMonth = java.time.YearMonth.now().minusMonths(1)
+    val closing = lf.create<MonthlyClosing>(viewModelScope, "closing") { api.closing(lastMonth.year, lastMonth.monthValue) }
+    fun confirmClosing() = viewModelScope.launch {
+        safeCall { api.confirmClosing(ClosingRequest(lastMonth.year, lastMonth.monthValue)) }
+            .onSuccess { _events.tryEmit("Registro confirmado"); closing.refresh() }
+            .onFailure { _events.tryEmit(it.userMessage()) }
+    }
     /** Attendance warnings from a manager; the unjustified ones are shown on Home. */
     val warnings = lf.create<List<AttendanceWarning>>(viewModelScope, "late_notifications") { api.lateNotifications() }
 
@@ -253,7 +261,7 @@ class DashboardViewModel @Inject constructor(
     }
 
     fun refreshAll() {
-        status.refresh(); vacations.refresh(); balance.refresh(); news.refresh(); week.refresh(); warnings.refresh()
+        status.refresh(); vacations.refresh(); balance.refresh(); news.refresh(); week.refresh(); warnings.refresh(); closing.refresh()
         viewModelScope.launch { reminders.refresh() }
     }
 
@@ -351,6 +359,17 @@ class CalendarViewModel @Inject constructor(private val api: Api, lf: LoaderFact
     val mine = lf.create<List<VacationRequest>>(viewModelScope, "vacations") { api.vacations() }
     val team = lf.create<List<VacationRequest>>(viewModelScope, "team_vacations") { api.teamVacations() }
     val adjustments = lf.create<List<FichajeAdjustment>>(viewModelScope, "my_adjustments") { api.myAdjustments() }
+
+    /** Public holidays by date (not worked days: never an unjustified absence). Loaded per year. */
+    private val _holidays = MutableStateFlow<Map<java.time.LocalDate, String>>(emptyMap())
+    val holidays = _holidays.asStateFlow()
+    private val holidayYears = mutableSetOf<Int>()
+    fun loadHolidays(year: Int) = viewModelScope.launch {
+        if (!holidayYears.add(year)) return@launch
+        safeCall { api.holidays(year) }
+            .onSuccess { list -> _holidays.update { it + list.mapNotNull { h -> runCatching { java.time.LocalDate.parse(h.date.take(10)) to h.name }.getOrNull() } } }
+            .onFailure { holidayYears.remove(year) }
+    }
 
     /** My clock-ins per day, loaded per visible month (the calendar is where "Mis fichajes" lives). */
     private val _days = MutableStateFlow<Map<java.time.YearMonth, List<FichajeDayStats>>>(emptyMap())

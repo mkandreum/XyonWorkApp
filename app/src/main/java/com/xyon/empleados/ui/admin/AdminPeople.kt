@@ -361,7 +361,10 @@ fun AdminRequestsScreen(kind: String, manager: Boolean, onBack: () -> Unit, snac
 // ───────────────────────── Fichaje adjustments ─────────────────────────
 
 @HiltViewModel
-class AdminAdjustmentsVm @Inject constructor(private val api: AdminApi, lf: LoaderFactory) : AdminVm() {
+class AdminAdjustmentsVm @Inject constructor(private val api: AdminApi, lf: LoaderFactory, private val meProvider: MeProvider) : AdminVm() {
+    /** Who is looking: nobody approves their own correction (an admin does it). */
+    val me = MutableStateFlow<User?>(null)
+    init { viewModelScope.launch { me.value = runCatching { meProvider.user() }.getOrNull() } }
     val pending = lf.create<List<FichajeAdjustment>>(viewModelScope, "adm_adj_pending") { api.pendingAdjustments() }
     val all = lf.create<List<FichajeAdjustment>>(viewModelScope, "adm_adj_all") { api.allAdjustments() }
     private fun refresh() { pending.refresh(); all.refresh() }
@@ -373,6 +376,7 @@ class AdminAdjustmentsVm @Inject constructor(private val api: AdminApi, lf: Load
 fun AdminAdjustmentsScreen(onBack: () -> Unit, snack: (String) -> Unit, vm: AdminAdjustmentsVm = hiltViewModel()) {
     var tab by remember { mutableStateOf("p") }
     val st by (if (tab == "p") vm.pending else vm.all).state.collectAsState()
+    val meUser by vm.me.collectAsState()
     var rej by remember { mutableStateOf<FichajeAdjustment?>(null) }
     AdminPage("Ajustes de fichaje", "Aprobar o rechazar correcciones", onBack, vm, snack) {
         ChipsRow(listOf("p" to "Pendientes", "h" to "Historial"), tab, { tab = it })
@@ -390,7 +394,10 @@ fun AdminAdjustmentsScreen(onBack: () -> Unit, snack: (String) -> Unit, vm: Admi
                             }
                             StatusChip(statusLabel(a.status), statusTone(a.status))
                         }
-                        if (a.status == "PENDING") ApproveRejectRow({ vm.approve(a.id) }, { rej = a })
+                        if (a.status == "PENDING") {
+                            if (a.user?.id == meUser?.id && meUser?.isAdmin != true) Muted("Es tu propia solicitud: la resuelve un administrador.")
+                            else ApproveRejectRow({ vm.approve(a.id) }, { rej = a })
+                        }
                     }
                 }
             }

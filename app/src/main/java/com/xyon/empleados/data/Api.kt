@@ -43,6 +43,9 @@ interface Api {
     @GET("news") suspend fun news(): List<NewsItem>
     @GET("events") suspend fun events(): List<EventItem>
     @GET("holidays/next") suspend fun nextHoliday(): Holiday?
+    @GET("holidays") suspend fun holidays(@Query("year") year: Int): List<Holiday>
+    @GET("fichajes/closing") suspend fun closing(@Query("year") year: Int, @Query("month") month: Int): MonthlyClosing
+    @POST("fichajes/closing") suspend fun confirmClosing(@Body b: ClosingRequest): okhttp3.ResponseBody
     @GET("notifications") suspend fun notifications(): NotificationsResponse
     @PUT("notifications/{id}/read") suspend fun readNotification(@Path("id") id: String): ResponseBody
     @PUT("notifications/read-all") suspend fun readAllNotifications(): ResponseBody

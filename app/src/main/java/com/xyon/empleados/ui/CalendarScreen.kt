@@ -74,6 +74,8 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
     var requestExitFor by remember { mutableStateOf<Fichaje?>(null) }
     LaunchedEffect(Unit) { vm.msg.collect { snack(it) } }
     LaunchedEffect(month) { vm.loadMonth(month) }
+    val holidays by vm.holidays.collectAsState()
+    LaunchedEffect(month.year) { vm.loadHolidays(month.year) }
 
     // Minute tick: today's open entry counts up to now
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -98,8 +100,9 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
         val isToday = day == today
         val absence = vacOn(day, myVac).firstOrNull()
         val worked = CalendarMath.workedHours(stats, nowMillis, isToday)
-        val expected = if (absence != null) 0.0 else CalendarMath.expectedHours(day, stats)
         val has = stats != null && stats.fichajes.isNotEmpty()
+        // A public holiday is not a worked day (unless the person did clock in)
+        val expected = if (absence != null || (holidays.containsKey(day) && !has)) 0.0 else CalendarMath.expectedHours(day, stats)
         return DayInfo(
             date = day, stats = stats, isToday = isToday, absence = absence, worked = worked, expected = expected, hasRecords = has,
             live = CalendarMath.liveEntry(stats, nowMillis) != null,

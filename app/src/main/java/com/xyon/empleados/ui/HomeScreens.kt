@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.FactCheck
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.semantics.Role
@@ -46,6 +47,7 @@ fun HomeScreen(
     val week by vm.week.state.collectAsState()
     val notifs by notifVm.items.state.collectAsState()
     val warnings by vm.warnings.state.collectAsState()
+    val closing by vm.closing.state.collectAsState()
     var justifyFor by remember { mutableStateOf<AttendanceWarning?>(null) }
     var requestExitFor by remember { mutableStateOf<Fichaje?>(null) }
     val busy by vm.busy.collectAsState()
@@ -154,6 +156,29 @@ fun HomeScreen(
                             Text("Entraste a las ${fmtTimeOf(m.timestamp)} y no consta la salida.", color = InkBlack.copy(alpha = .8f), style = MaterialTheme.typography.bodyMedium)
                             TextButton({ requestExitFor = m }, contentPadding = PaddingValues(0.dp)) {
                                 Text("Solicitar salida", color = InkBlack, fontWeight = FontWeight.Black, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)
+                            }
+                        }
+                    }
+                }
+            }
+            closing.data?.takeIf { c -> c.canConfirm && c.status != "CONFIRMED" && c.status != "NO_RECORDS" }?.let { c ->
+                item {
+                    val shape = RoundedCornerShape(28.dp)
+                    Row(
+                        Modifier.fillMaxWidth().clip(shape).background(Sun).border(1.5.dp, Xyon.colors.outline, shape).padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.FactCheck, null, tint = InkBlack)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Confirma tu registro de ${monthName(c.month).lowercase()}", color = InkBlack, fontWeight = FontWeight.Black)
+                            Text(
+                                "${c.daysWorked} días · %.1f h fichadas.".format(c.totalHours) +
+                                    if (c.status == "CHANGED") " Se corrigió algún fichaje tras tu confirmación." else " Si algo no cuadra, pide un ajuste en el calendario.",
+                                color = InkBlack.copy(alpha = .8f), style = MaterialTheme.typography.bodyMedium,
+                            )
+                            TextButton({ vm.confirmClosing() }, contentPadding = PaddingValues(0.dp)) {
+                                Text("Es correcto", color = InkBlack, fontWeight = FontWeight.Black, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)
                             }
                         }
                     }

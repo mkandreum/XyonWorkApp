@@ -94,6 +94,14 @@ data class EventItem(
     val id: String = "", val title: String = "", val description: String? = null,
     val date: String = "", val location: String? = null,
 )
+/** Monthly closing of my time record (the worker confirms the month is right). */
+@Serializable
+data class MonthlyClosing(
+    val year: Int = 0, val month: Int = 0, val status: String = "NO_RECORDS", val canConfirm: Boolean = false,
+    val records: Int = 0, val daysWorked: Int = 0, val totalHours: Double = 0.0, val acknowledgedAt: String? = null,
+)
+@Serializable data class ClosingRequest(val year: Int, val month: Int)
+
 @Serializable data class Holiday(val id: String = "", val name: String = "", val date: String = "", val year: Int = 0)
 
 @Serializable
