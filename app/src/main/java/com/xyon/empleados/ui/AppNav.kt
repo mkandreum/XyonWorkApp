@@ -277,7 +277,15 @@ private fun BottomBar(tabs: List<Tab>, selected: String, onSelect: (String) -> U
     val x = Xyon.colors
     val idx = tabs.indexOfFirst { it.route == selected }.coerceAtLeast(0)
     val item = if (tabs.size > 5) 52.dp else 58.dp
-    Box(Modifier.navigationBarsPadding().padding(bottom = 14.dp)) {
+    // Icon-only bar: the section's name shows briefly above it after choosing one
+    var hint by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(hint) { if (hint != null) { kotlinx.coroutines.delay(1500); hint = null } }
+    Column(Modifier.navigationBarsPadding().padding(bottom = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        AnimatedVisibility(hint != null, enter = fadeIn() + scaleIn(spring(Spring.DampingRatioMediumBouncy)), exit = fadeOut()) {
+            Box(Modifier.padding(bottom = 8.dp).clip(CircleShape).background(Lime).padding(horizontal = 14.dp, vertical = 6.dp)) {
+                Text(hint.orEmpty(), color = InkBlack, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, style = MaterialTheme.typography.labelLarge)
+            }
+        }
         Box(Modifier.clip(CircleShape).background(x.capsule).border(1.5.dp, if (x.dark) x.outline else Color.Transparent, CircleShape).padding(7.dp)) {
             val ind by animateDpAsState(item * idx, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "ind")
             Box(Modifier.offset(x = ind).size(item).clip(CircleShape).background(Lime))
@@ -289,7 +297,7 @@ private fun BottomBar(tabs: List<Tab>, selected: String, onSelect: (String) -> U
                     Box(
                         // TalkBack announces "tab, selected" for the current section
                         Modifier.size(item).clip(CircleShape).semantics { semanticsSelected = sel }.clickable(remember { MutableInteractionSource() }, null, role = androidx.compose.ui.semantics.Role.Tab) {
-                            if (!sel) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onSelect(t.route) }
+                            if (!sel) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); hint = t.label; onSelect(t.route) }
                         },
                         contentAlignment = Alignment.Center,
                     ) { Icon(t.icon, t.label, tint = tint, modifier = Modifier.scale(s)) }

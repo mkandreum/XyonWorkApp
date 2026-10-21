@@ -39,6 +39,7 @@ interface BackgroundEntryPoint {
     fun api(): Api
     fun session(): SessionStore
     fun offline(): OfflineFichajes
+    fun http(): okhttp3.OkHttpClient
 }
 
 /**
@@ -65,6 +66,7 @@ object Background {
 
     /** Start polling for notices after login (15 min is the WorkManager minimum). */
     fun startNotifications(ctx: Context) {
+        Realtime.start(ctx) // instant delivery while the connection is up; the poll below is the safety net
         WorkManager.getInstance(ctx).enqueueUniquePeriodicWork(
             POLL, ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<NotificationsWorker>(15, TimeUnit.MINUTES).setConstraints(online).build(),
@@ -73,6 +75,7 @@ object Background {
 
     /** Logout: stop polling and forget what was shown (next login starts clean). */
     fun stop(ctx: Context) {
+        Realtime.stop(ctx)
         WorkManager.getInstance(ctx).cancelUniqueWork(POLL)
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
     }

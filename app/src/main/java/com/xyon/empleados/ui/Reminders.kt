@@ -304,6 +304,8 @@ class ReminderBootReceiver : BroadcastReceiver() {
             Intent.ACTION_TIMEZONE_CHANGED -> {
                 Reminders.reschedule(context)
                 Reminders.requestImmediateSync(context)
+                // After a reboot or an app update the real-time connection has to be opened again
+                if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) Realtime.start(context)
             }
         }
         if (Reminders.enabled(context)) Reminders.ensurePeriodicSync(context)

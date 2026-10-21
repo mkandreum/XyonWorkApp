@@ -254,6 +254,22 @@ fun ProfileScreen(
                 HapticSwitch(reminders, { on -> reminders = on; Reminders.setEnabled(ctx, on) },
                     colors = SwitchDefaults.colors(checkedTrackColor = x.blue, checkedThumbColor = Lime))
             }
+            var realtime by remember { mutableStateOf(Realtime.enabled(ctx)) }
+            Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.NotificationsActive, null, tint = x.blue); Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Avisos al instante")
+                    Text("Mantiene una conexión con tu empresa para recibir los avisos en el momento, sin servicios de Google. Verás un aviso silencioso fijo.", color = x.inkSoft, style = MaterialTheme.typography.bodyMedium)
+                }
+                HapticSwitch(realtime, { on -> realtime = on; Realtime.setEnabled(ctx, on) },
+                    colors = SwitchDefaults.colors(checkedTrackColor = x.blue, checkedThumbColor = Lime))
+            }
+            if (realtime) {
+                // Without this, many phones pause apps with the screen off and the notice arrives late
+                NavRow(Icons.Filled.BatteryChargingFull, "Evitar que el ahorro de batería lo pause", {
+                    runCatching { ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                })
+            }
             var haptics by remember { mutableStateOf(HapticsPrefs.enabled) }
             Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Vibration, null, tint = x.blue); Spacer(Modifier.width(14.dp))

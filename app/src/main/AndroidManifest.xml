@@ -8,6 +8,9 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Real-time notices without Firebase: a silent foreground service keeps one HTTPS connection to the company server -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Exact clock-in reminders. If the user denies it on Android 12+, the app
          falls back to an inexact alarm instead of dropping the reminder. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
@@ -49,6 +52,14 @@
                     android:pathPrefix="/reset-password" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".ui.RealtimeService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Persistent connection to the employer's own server to deliver time-sensitive workplace notices without a third-party push service" />
+        </service>
         <receiver
             android:name=".ui.ReminderAlarmReceiver"
             android:exported="false" />

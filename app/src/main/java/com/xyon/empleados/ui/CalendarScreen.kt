@@ -125,6 +125,26 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
         }
         LoadScreen(events, { vm.refresh(month) }) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 130.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Days that need a look (unresolved incident or no clock-in): one tap goes to the next one
+                val review = infos.filter { it.issue || it.missed }
+                if (review.isNotEmpty()) {
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Sun.copy(alpha = .35f)).padding(start = 16.dp, end = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Filled.Warning, null, tint = x.ink, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            if (review.size == 1) "1 día por revisar este mes" else "${review.size} días por revisar este mes",
+                            Modifier.weight(1f), fontWeight = FontWeight.ExtraBold,
+                        )
+                        TextButton({
+                            val i = review.indexOfFirst { it.date == selected }
+                            selected = review[(i + 1) % review.size].date
+                            sheetOpen = true
+                        }) { Text(if (review.any { it.date == selected }) "Siguiente" else "Revisar", color = x.ink, fontWeight = FontWeight.ExtraBold) }
+                    }
+                }
                 XyonCard(Modifier.fillMaxWidth().staggered(0)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton({ month = month.minusMonths(1) }) { Icon(Icons.Filled.ChevronLeft, "Mes anterior") }
@@ -140,7 +160,7 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
                     val lead = month.atDay(1).dayOfWeek.value - 1
                     val cells = List(lead) { null } + (1..month.lengthOfMonth()).map { month.atDay(it) }
                     cells.chunked(7).forEach { week ->
-                        Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                             for (i in 0 until 7) {
                                 val day = week.getOrNull(i)
                                 if (day == null) Spacer(Modifier.weight(1f).height(56.dp))
@@ -378,6 +398,9 @@ private fun DaySheet(
         }
 
         pairs.forEach { p -> SessionCard(p, requests, onAdjust, onRemind) }
+        if (pairs.isNotEmpty()) {
+            Text("¿Una hora no es correcta? Púlsala para pedir la corrección; tu responsable la revisa.", color = Xyon.colors.inkSoft, style = MaterialTheme.typography.bodyMedium)
+        }
 
         if (canRequestExit) {
             TextButton({ onRequestExit(openEntry!!) }) {
@@ -475,8 +498,8 @@ private fun TimeButton(f: Fichaje, request: FichajeAdjustment?, onAdjust: (Ficha
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(time, fontWeight = FontWeight.Black, fontSize = 18.sp)
-        if (canAdjust) Icon(Icons.Filled.Edit, null, tint = x.inkSoft, modifier = Modifier.padding(start = 4.dp).size(13.dp))
+        Text(time, fontWeight = FontWeight.Black, fontSize = 18.sp, textDecoration = if (canAdjust) androidx.compose.ui.text.style.TextDecoration.Underline else null)
+        if (canAdjust) Icon(Icons.Filled.Edit, null, tint = x.inkSoft, modifier = Modifier.padding(start = 4.dp).size(16.dp))
     }
 }
 
