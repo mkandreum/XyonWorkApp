@@ -414,7 +414,7 @@ fun ScreenHeader(title: String, subtitle: String? = null, onBack: (() -> Unit)? 
     Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         if (onBack != null) {
             Box(
-                Modifier.padding(end = 12.dp).size(46.dp).clip(CircleShape).background(x.card).border(1.5.dp, x.outline, CircleShape).clickable(role = Role.Button, onClick = onBack),
+                Modifier.padding(end = 12.dp).size(48.dp).clip(CircleShape).background(x.card).border(1.5.dp, x.outline, CircleShape).clickable(role = Role.Button, onClick = onBack),
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", tint = x.ink) }
         }

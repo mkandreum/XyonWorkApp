@@ -1,5 +1,6 @@
 package com.xyon.empleados.ui
 
+import android.content.Context
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -27,6 +28,33 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
 
 /**
+ * The person's own switch for haptics ("Vibración" in Profile). It sits on top of the system
+ * "touch feedback" setting, which is always respected too. Read synchronously from anywhere.
+ */
+object HapticsPrefs {
+    private const val FILE = "xyon_ui"
+    private const val KEY = "haptics"
+    @Volatile var enabled: Boolean = true
+        private set
+
+    fun init(ctx: Context) {
+        enabled = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).getBoolean(KEY, true)
+    }
+
+    fun setEnabled(ctx: Context, on: Boolean) {
+        enabled = on
+        ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putBoolean(KEY, on).apply()
+    }
+}
+
+/** Every Compose haptic goes through this gate, so the preference covers nav bar, buttons, switches… */
+private class GatedHaptic(private val base: HapticFeedback) : HapticFeedback {
+    override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) {
+        if (HapticsPrefs.enabled) base.performHapticFeedback(hapticFeedbackType)
+    }
+}
+
+/**
  * Light tick on every completed tap of anything that uses the default indication (cards, rows,
  * icon buttons, chips, dialog buttons, calendar days…). Components that already vibrate on their
  * own (nav bar, XyonButton, clock-in button) draw no indication, so they never double up.
@@ -35,9 +63,10 @@ import kotlinx.coroutines.launch
 @Composable
 fun ProvideTapHaptics(content: @Composable () -> Unit) {
     val base = LocalIndication.current
-    val haptic = LocalHapticFeedback.current
+    val system = LocalHapticFeedback.current
+    val haptic = remember(system) { GatedHaptic(system) }
     val wrapped = remember(base, haptic) { if (base is IndicationNodeFactory) HapticIndication(base, haptic) else base }
-    CompositionLocalProvider(LocalIndication provides wrapped, content = content)
+    CompositionLocalProvider(LocalIndication provides wrapped, LocalHapticFeedback provides haptic, content = content)
 }
 
 private class HapticIndication(
@@ -92,11 +121,11 @@ fun HapticCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modi
 }
 
 /** Success pattern (clock-in done): the system "confirm" on Android 11+, a long press before that. */
-fun View.hapticConfirm() = performHapticFeedback(
+fun View.hapticConfirm(): Boolean = HapticsPrefs.enabled && performHapticFeedback(
     if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.LONG_PRESS,
 )
 
 /** Failure pattern (clock-in rejected): the system "reject" on Android 11+, a long press before that. */
-fun View.hapticReject() = performHapticFeedback(
+fun View.hapticReject(): Boolean = HapticsPrefs.enabled && performHapticFeedback(
     if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.LONG_PRESS,
 )

@@ -69,7 +69,7 @@ private fun AuthShell(
                     Row(Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (onBack != null) {
                             Box(
-                                Modifier.padding(end = 12.dp).size(44.dp).clip(CircleShape).background(Color.White).clickable(role = Role.Button, onClick = onBack),
+                                Modifier.padding(end = 12.dp).size(48.dp).clip(CircleShape).background(Color.White).clickable(role = Role.Button, onClick = onBack),
                                 contentAlignment = Alignment.Center,
                             ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", tint = InkBlack) }
                         }

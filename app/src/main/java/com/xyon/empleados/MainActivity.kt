@@ -22,6 +22,7 @@ class XyonApp : Application() {
     override fun onCreate() {
         super.onCreate()
         com.xyon.empleados.data.ServerConfig.init(this)
+        com.xyon.empleados.ui.HapticsPrefs.init(this)
         // WorkManager initialises before Application.onCreate; this only enqueues
         // the periodic schedule refresh (no-op until the user logs in).
         runCatching { com.xyon.empleados.ui.Reminders.ensurePeriodicSync(this) }

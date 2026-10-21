@@ -1,5 +1,7 @@
 package com.xyon.empleados.ui
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected as semanticsSelected
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -285,7 +287,8 @@ private fun BottomBar(tabs: List<Tab>, selected: String, onSelect: (String) -> U
                     val s by animateFloatAsState(if (sel) 1.15f else 1f, spring(Spring.DampingRatioHighBouncy, Spring.StiffnessMedium), label = "s")
                     val tint by animateColorAsState(if (sel) InkBlack else x.onCapsule.copy(alpha = .62f), label = "t")
                     Box(
-                        Modifier.size(item).clip(CircleShape).clickable(remember { MutableInteractionSource() }, null) {
+                        // TalkBack announces "tab, selected" for the current section
+                        Modifier.size(item).clip(CircleShape).semantics { semanticsSelected = sel }.clickable(remember { MutableInteractionSource() }, null, role = androidx.compose.ui.semantics.Role.Tab) {
                             if (!sel) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onSelect(t.route) }
                         },
                         contentAlignment = Alignment.Center,

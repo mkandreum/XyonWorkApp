@@ -254,6 +254,16 @@ fun ProfileScreen(
                 HapticSwitch(reminders, { on -> reminders = on; Reminders.setEnabled(ctx, on) },
                     colors = SwitchDefaults.colors(checkedTrackColor = x.blue, checkedThumbColor = Lime))
             }
+            var haptics by remember { mutableStateOf(HapticsPrefs.enabled) }
+            Row(Modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Vibration, null, tint = x.blue); Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Vibración")
+                    Text("Un toque suave al pulsar y al fichar. También depende de los ajustes de tu móvil", color = x.inkSoft, style = MaterialTheme.typography.bodyMedium)
+                }
+                HapticSwitch(haptics, { on -> haptics = on; HapticsPrefs.setEnabled(ctx, on) },
+                    colors = SwitchDefaults.colors(checkedTrackColor = x.blue, checkedThumbColor = Lime))
+            }
             // Special access that existing users may need to grant after Android 14.
             if (reminders && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                 val alarms = ctx.getSystemService(android.app.AlarmManager::class.java)
