@@ -129,6 +129,9 @@ data class CreateFichajeResponse(
 data class FichajeDayStats(
     val date: String = "", val fichajes: List<Fichaje> = emptyList(), val horasTrabajadas: Double = 0.0,
     val isComplete: Boolean = false, val isLate: Boolean = false, val isEarlyDeparture: Boolean = false,
+    /** Ids of the punches that cause the incident (a late notice must point at the late entry). */
+    val lateFichajeIds: List<String> = emptyList(), val earlyFichajeIds: List<String> = emptyList(),
+    val validationMessage: String? = null,
     val turno: TurnoInfo? = null,
     /** Schedule the server resolved for that day (shift, per-day override or one-off exception). */
     val daySchedule: DaySchedule? = null,

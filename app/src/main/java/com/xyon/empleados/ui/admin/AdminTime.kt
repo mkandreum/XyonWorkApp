@@ -46,7 +46,7 @@ class AdminFichajesVm @Inject constructor(private val api: AdminApi, private val
     private val _csv = MutableSharedFlow<Pair<ByteArray, String>>(extraBufferCapacity = 1)
     val csv: SharedFlow<Pair<ByteArray, String>> = _csv.asSharedFlow()
     var isAdmin = false
-    private var lastUser = ""; private var lastMode = "week"
+    private var lastUser = ""; private var lastMode = "week"; private var lastMonth: java.time.YearMonth = java.time.YearMonth.now()
 
     fun loadPeople(admin: Boolean) {
         isAdmin = admin
@@ -58,19 +58,21 @@ class AdminFichajesVm @Inject constructor(private val api: AdminApi, private val
         }
     }
 
-    fun load(userId: String, mode: String) {
-        lastUser = userId; lastMode = mode
+    fun load(userId: String, mode: String, month: java.time.YearMonth = java.time.YearMonth.now()) {
+        lastUser = userId; lastMode = mode; lastMonth = month
         viewModelScope.launch {
             days.value = LoadState(loading = true)
-            safeCall { if (mode == "week") api.week(userId) else api.month(userId) }
+            safeCall { if (mode == "week") api.week(userId) else api.month(userId, month.year, month.monthValue) }
                 .onSuccess { days.value = LoadState(data = it.sortedByDescending { d -> d.date }, loading = false) }
                 .onFailure { days.value = LoadState(loading = false, error = it.userMessage()) }
         }
     }
-    fun reload() { if (lastUser.isNotBlank()) load(lastUser, lastMode) }
+    fun reload() { if (lastUser.isNotBlank()) load(lastUser, lastMode, lastMonth) }
 
     fun warnLate(userId: String, d: FichajeDayStats) {
-        val f = d.fichajes.firstOrNull { it.tipo == "ENTRADA" } ?: d.fichajes.firstOrNull() ?: return say("Sin fichaje asociado")
+        // The notice is about the late entry itself, not just the first punch of the day
+        val f = d.fichajes.firstOrNull { it.id in d.lateFichajeIds }
+            ?: d.fichajes.firstOrNull { it.tipo == "ENTRADA" } ?: return say("Este día no tiene ninguna entrada")
         act("Aviso de retraso enviado", { api.lateNotify(LateNotificationRequest(userId, f.id, d.date.take(10))) })
     }
 
@@ -99,11 +101,12 @@ fun AdminFichajesScreen(admin: Boolean, onBack: () -> Unit, snack: (String) -> U
     val days by vm.days.collectAsState()
     var uid by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf("week") }
+    var month by remember { mutableStateOf(java.time.YearMonth.now()) }
     var exportOpen by remember { mutableStateOf(false) }
     var manual by remember { mutableStateOf<ManualTarget?>(null) }
     var deleting by remember { mutableStateOf<Fichaje?>(null) }
     LaunchedEffect(Unit) { vm.loadPeople(admin) }
-    LaunchedEffect(uid, mode) { if (uid.isNotBlank()) vm.load(uid, mode) }
+    LaunchedEffect(uid, mode, month) { if (uid.isNotBlank()) vm.load(uid, mode, month) }
     LaunchedEffect(Unit) {
         vm.csv.collect { (bytes, name) ->
             val dir = File(ctx.cacheDir, "docs").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
@@ -123,7 +126,15 @@ fun AdminFichajesScreen(admin: Boolean, onBack: () -> Unit, snack: (String) -> U
                 Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     Dropdown("Empleado", uid, list.map { it.id to "${it.name} · ${it.department}" }, { uid = it })
                 }
-                ChipsRow(listOf("week" to "Esta semana", "month" to "Este mes"), mode, { mode = it })
+                ChipsRow(listOf("week" to "Esta semana", "month" to "Mes"), mode, { mode = it })
+                if (mode == "month") {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton({ month = month.minusMonths(1) }) { Icon(Icons.Filled.ChevronLeft, "Mes anterior") }
+                        Text("${MONTHS_ES[month.monthValue - 1]} ${month.year}", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        IconButton({ month = month.plusMonths(1) }, enabled = month < java.time.YearMonth.now()) { Icon(Icons.Filled.ChevronRight, "Mes siguiente") }
+                    }
+                }
                 if (uid.isBlank()) EmptyState(Icons.Filled.Person, "Selecciona un empleado")
                 else LoadScreen(days, { vm.reload() }) { ds ->
                     ListScreenColumn {
@@ -138,7 +149,7 @@ fun AdminFichajesScreen(admin: Boolean, onBack: () -> Unit, snack: (String) -> U
                                     Column(horizontalAlignment = Alignment.End) {
                                         if (d.isLate) StatusChip("Retraso", Tone.Warning)
                                         if (d.isEarlyDeparture) StatusChip("Salida anticipada", Tone.Warning)
-                                        if (!d.isComplete && d.fichajes.isNotEmpty()) StatusChip("Incompleto", Tone.Neutral)
+                                        if (!d.isComplete && d.fichajes.isNotEmpty() && d.date.take(10) != LocalDate.now().toString()) StatusChip("Incompleto", Tone.Neutral)
                                     }
                                 }
                                 if (d.fichajes.isEmpty()) Muted("Sin fichajes")

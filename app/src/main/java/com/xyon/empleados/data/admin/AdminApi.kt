@@ -51,7 +51,7 @@ interface AdminApi {
     @GET("manager/team-members") suspend fun teamMembers(): List<User>
     @GET("fichajes/history") suspend fun history(@Query("userId") userId: String, @Query("startDate") start: String, @Query("endDate") end: String): List<Fichaje>
     @GET("fichajes/week/{id}") suspend fun week(@Path("id") id: String): List<FichajeDayStats>
-    @GET("fichajes/month/{id}") suspend fun month(@Path("id") id: String): List<FichajeDayStats>
+    @GET("fichajes/month/{id}") suspend fun month(@Path("id") id: String, @Query("year") year: Int? = null, @Query("month") month: Int? = null): List<FichajeDayStats>
     @GET("fichajes/report") suspend fun report(@Query("month") m: Int, @Query("year") y: Int, @Query("userId") userId: String?, @Query("department") department: String?): ResponseBody
     @POST("fichajes/manual") suspend fun manualCreate(@Body b: ManualFichajeRequest): ManualFichajeResponse
     @PUT("fichajes/manual/{id}") suspend fun manualUpdate(@Path("id") id: String, @Body b: ManualFichajeEdit): ManualFichajeResponse

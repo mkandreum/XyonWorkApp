@@ -245,6 +245,13 @@ class DashboardViewModel @Inject constructor(
     private val _failed = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val failed = _failed.asSharedFlow()
 
+    /** The employee forgot to clock out: ask the manager to add the exit (needs approval). */
+    fun requestExit(r: CreateAdjustmentRequest) = viewModelScope.launch {
+        safeCall { api.createAdjustment(r) }
+            .onSuccess { _events.tryEmit("Solicitud enviada. Tu responsable la revisará.") }
+            .onFailure { _events.tryEmit(it.userMessage()) }
+    }
+
     fun refreshAll() {
         status.refresh(); vacations.refresh(); balance.refresh(); news.refresh(); week.refresh(); warnings.refresh()
         viewModelScope.launch { reminders.refresh() }

@@ -481,10 +481,13 @@ private fun TimeButton(f: Fichaje, request: FichajeAdjustment?, onAdjust: (Ficha
 
 /** Entrada abierta sin salida: el empleado pide al responsable que la añada (ADD_EXIT). */
 @Composable
-private fun RequestExitDialog(entry: Fichaje, onDismiss: () -> Unit, onSend: (CreateAdjustmentRequest) -> Unit) {
+internal fun RequestExitDialog(entry: Fichaje, onDismiss: () -> Unit, onSend: (CreateAdjustmentRequest) -> Unit) {
     var time by remember { mutableStateOf("") }
     var reason by remember { mutableStateOf("") }
-    val valid = Regex("^([01]\\d|2[0-3]):[0-5]\\d$").matches(time) && reason.trim().length >= 5
+    val timeOk = Regex("^([01]\\d|2[0-3]):[0-5]\\d$").matches(time)
+    // The exit goes after the entry, on the same day (the server enforces it too)
+    val afterEntry = timeOk && time > fmtTimeOf(entry.timestamp)
+    val valid = afterEntry && reason.trim().length >= 5
     AlertDialog(
         onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         title = { Text("Solicitar salida") },
@@ -494,7 +497,8 @@ private fun RequestExitDialog(entry: Fichaje, onDismiss: () -> Unit, onSend: (Cr
                     "Entrada del ${fmtDate(entry.timestamp)} a las ${fmtTimeOf(entry.timestamp)} sin salida registrada.",
                     color = Xyon.colors.inkSoft,
                 )
-                XField(time, { time = it }, "Hora de salida (HH:mm)")
+                XField(time, { time = it }, "Hora de salida (HH:mm)",
+                    error = if (time.isNotEmpty() && !timeOk) "Formato HH:mm" else if (timeOk && !afterEntry) "Tiene que ser después de la entrada" else null)
                 XField(reason, { reason = it }, "Motivo (mín. 5 caracteres)", singleLine = false, minLines = 2)
             }
         },

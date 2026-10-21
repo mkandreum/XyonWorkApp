@@ -47,6 +47,7 @@ fun HomeScreen(
     val notifs by notifVm.items.state.collectAsState()
     val warnings by vm.warnings.state.collectAsState()
     var justifyFor by remember { mutableStateOf<AttendanceWarning?>(null) }
+    var requestExitFor by remember { mutableStateOf<Fichaje?>(null) }
     val busy by vm.busy.collectAsState()
     val pendingOffline by vm.pendingOffline.collectAsState()
     LaunchedEffect(Unit) { vm.events.collect { snack(it) } }
@@ -150,7 +151,10 @@ fun HomeScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text("Falta la salida del ${fmtDate(m.timestamp)}", color = InkBlack, fontWeight = FontWeight.Black)
-                            Text("Entraste a las ${fmtTimeOf(m.timestamp)}. Pide a tu responsable que registre la salida.", color = InkBlack.copy(alpha = .8f), style = MaterialTheme.typography.bodyMedium)
+                            Text("Entraste a las ${fmtTimeOf(m.timestamp)} y no consta la salida.", color = InkBlack.copy(alpha = .8f), style = MaterialTheme.typography.bodyMedium)
+                            TextButton({ requestExitFor = m }, contentPadding = PaddingValues(0.dp)) {
+                                Text("Solicitar salida", color = InkBlack, fontWeight = FontWeight.Black, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)
+                            }
                         }
                     }
                 }
@@ -208,6 +212,9 @@ fun HomeScreen(
                 staggeredItems(upcoming, { v -> v.id }) { i, v -> VacationRow(v, Modifier) }
             }
         }
+    }
+    requestExitFor?.let { entry ->
+        RequestExitDialog(entry, onDismiss = { requestExitFor = null }) { req -> vm.requestExit(req); requestExitFor = null }
     }
     justifyFor?.let { w ->
         var text by remember { mutableStateOf("") }
