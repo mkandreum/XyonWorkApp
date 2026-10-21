@@ -154,12 +154,21 @@ data class DaySchedule(
 
 @Serializable
 data class FichajeAdjustment(
-    val id: String = "", val fichajeId: String = "", val userId: String = "", val user: User? = null,
-    val originalTimestamp: String = "", val requestedTimestamp: String = "", val reason: String = "",
+    val id: String = "", val fichajeId: String? = null, val userId: String = "", val user: User? = null,
+    val originalTimestamp: String = "", val requestedTimestamp: String = "", val requestedExitTimestamp: String? = null,
+    val kind: String? = null, val reason: String = "",
     val status: String = "PENDING", val rejectionReason: String? = null, val createdAt: String? = null,
 )
+/** "09:00 → 17:00" style summary: the day's own entry/exit for ADD_DAY, original → requested otherwise. */
+fun FichajeAdjustment.timesLabel(fmt: (String) -> String): String =
+    if (kind == "ADD_DAY" && requestedExitTimestamp != null) "${fmt(requestedTimestamp)} → ${fmt(requestedExitTimestamp)}"
+    else "${fmt(originalTimestamp)} → ${fmt(requestedTimestamp)}"
+
 @Serializable
-data class CreateAdjustmentRequest(val fichajeId: String, val requestedTimestamp: String, val reason: String, val kind: String? = null)
+data class CreateAdjustmentRequest(
+    val fichajeId: String? = null, val requestedTimestamp: String, val reason: String, val kind: String? = null,
+    val requestedExitTimestamp: String? = null,
+)
 @Serializable data class RejectRequest(val rejectionReason: String)
 
 @Serializable

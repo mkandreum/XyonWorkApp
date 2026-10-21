@@ -388,7 +388,8 @@ fun AdminAdjustmentsScreen(onBack: () -> Unit, snack: (String) -> Unit, vm: Admi
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(a.user?.name ?: "—", style = MaterialTheme.typography.titleMedium)
-                                Muted("${fmtDate(a.originalTimestamp)} ${fmtTimeOf(a.originalTimestamp)} → ${fmtTimeOf(a.requestedTimestamp)}")
+                                if (a.kind == "ADD_DAY") Muted("Día olvidado · ${fmtDate(a.requestedTimestamp)} ${a.timesLabel(::fmtTimeOf)}")
+                                else Muted("${fmtDate(a.originalTimestamp)} ${fmtTimeOf(a.originalTimestamp)} → ${fmtTimeOf(a.requestedTimestamp)}")
                                 Muted(a.reason)
                                 a.rejectionReason?.let { Muted("Rechazo: $it") }
                             }

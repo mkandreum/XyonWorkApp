@@ -72,6 +72,7 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
     var showTeam by remember { mutableStateOf(false) }
     var adjustFor by remember { mutableStateOf<Fichaje?>(null) }
     var requestExitFor by remember { mutableStateOf<Fichaje?>(null) }
+    var requestDayFor by remember { mutableStateOf<LocalDate?>(null) }
     LaunchedEffect(Unit) { vm.msg.collect { snack(it) } }
     LaunchedEffect(month) { vm.loadMonth(month) }
     val holidays by vm.holidays.collectAsState()
@@ -208,7 +209,7 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
                         XyonCard(Modifier.fillMaxWidth()) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text("${fmtDate(a.originalTimestamp)} · ${fmtTimeOf(a.originalTimestamp)} → ${fmtTimeOf(a.requestedTimestamp)}", style = MaterialTheme.typography.titleMedium)
+                                    Text("${fmtDate(a.originalTimestamp)} · ${a.timesLabel(::fmtTimeOf)}", style = MaterialTheme.typography.titleMedium)
                                     Text(a.reason, color = x.inkSoft, maxLines = 2)
                                     a.rejectionReason?.let { Text("Motivo: $it", color = Danger, style = MaterialTheme.typography.bodyMedium) }
                                 }
@@ -235,11 +236,15 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
                 onAdjust = { adjustFor = it },
                 onRemind = { vm.remind(it.id) },
                 onRequestExit = { requestExitFor = it },
+                onRequestDay = { requestDayFor = it },
             )
         }
     }
     adjustFor?.let { f ->
         AdjustFichajeDialog(f, onDismiss = { adjustFor = null }) { req -> vm.requestAdjustment(req); adjustFor = null }
+    }
+    requestDayFor?.let { d ->
+        RequestDayDialog(d, onDismiss = { requestDayFor = null }) { req -> vm.requestAdjustment(req); requestDayFor = null }
     }
     requestExitFor?.let { f ->
         RequestExitDialog(f, onDismiss = { requestExitFor = null }) { req -> vm.requestAdjustment(req); requestExitFor = null }
@@ -360,6 +365,7 @@ private fun DaySheet(
     info: DayInfo, requests: List<FichajeAdjustment>, nowMillis: Long,
     events: List<EventItem>, mine: List<VacationRequest>, teamVac: List<VacationRequest>,
     onClose: () -> Unit, onClockNow: () -> Unit, onAdjust: (Fichaje) -> Unit, onRemind: (FichajeAdjustment) -> Unit, onRequestExit: (Fichaje) -> Unit,
+    onRequestDay: (LocalDate) -> Unit,
 ) {
     val x = Xyon.colors
     val stats = info.stats
@@ -367,6 +373,10 @@ private fun DaySheet(
     val openEntry = pairs.lastOrNull()?.takeIf { it.entrada != null && it.salida == null }?.entrada
     // A shift still in progress is not a forgotten exit: no exit request or "incomplete" tag for it
     val canRequestExit = openEntry != null && !info.live && !info.date.isAfter(LocalDate.now())
+    // A whole forgotten day: no clock-ins, today or up to 60 days back (what the server accepts), nothing pending
+    val ageDays = java.time.temporal.ChronoUnit.DAYS.between(info.date, LocalDate.now())
+    val hasPendingDay = requests.any { it.kind == "ADD_DAY" && it.status == "PENDING" && parseDate(it.requestedTimestamp) == info.date }
+    val canRequestDay = stats?.fichajes.isNullOrEmpty() && ageDays in 0..60 && !hasPendingDay
     Column(
         Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -407,6 +417,14 @@ private fun DaySheet(
                 Icon(Icons.AutoMirrored.Filled.Logout, null, tint = Coral, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
                 Text("Solicitar salida", color = Coral, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        if (canRequestDay) {
+            TextButton({ onRequestDay(info.date) }) {
+                Icon(Icons.Filled.EventAvailable, null, tint = Coral, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("¿Trabajaste y no fichaste? Añadir día", color = Coral, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -534,6 +552,43 @@ internal fun RequestExitDialog(entry: Fichaje, onDismiss: () -> Unit, onSend: (C
                 val ldt = java.time.LocalDateTime.of(date, java.time.LocalTime.parse(time))
                 val iso = ldt.atZone(java.time.ZoneId.systemDefault()).toInstant().toString()
                 onSend(CreateAdjustmentRequest(entry.id, iso, reason.trim(), "ADD_EXIT"))
+            }) { Text("Enviar") }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("Cancelar") } },
+    )
+}
+
+
+// ───────── Whole forgotten day ─────────
+
+/** Día entero sin fichar: el empleado pide que se añadan entrada y salida (ADD_DAY). */
+@Composable
+internal fun RequestDayDialog(date: LocalDate, onDismiss: () -> Unit, onSend: (CreateAdjustmentRequest) -> Unit) {
+    var entry by remember { mutableStateOf("") }
+    var exit by remember { mutableStateOf("") }
+    var reason by remember { mutableStateOf("") }
+    val hhmm = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
+    val entryOk = hhmm.matches(entry)
+    val exitOk = hhmm.matches(exit)
+    val ordered = entryOk && exitOk && exit > entry
+    val valid = ordered && reason.trim().length >= 5
+    AlertDialog(
+        onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        title = { Text("Añadir día olvidado") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("${fmtDate(date.toString())}. Se añadirá a tu registro solo si tu responsable lo aprueba.", color = Xyon.colors.inkSoft)
+                XField(entry, { entry = it }, "Hora de entrada (HH:mm)", error = if (entry.isNotEmpty() && !entryOk) "Formato HH:mm" else null)
+                XField(exit, { exit = it }, "Hora de salida (HH:mm)",
+                    error = if (exit.isNotEmpty() && !exitOk) "Formato HH:mm" else if (entryOk && exitOk && !ordered) "Tiene que ser después de la entrada" else null)
+                XField(reason, { reason = it }, "Motivo (mín. 5 caracteres)", singleLine = false, minLines = 2)
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = {
+                val zone = java.time.ZoneId.systemDefault()
+                fun iso(t: String) = java.time.LocalDateTime.of(date, java.time.LocalTime.parse(t)).atZone(zone).toInstant().toString()
+                onSend(CreateAdjustmentRequest(requestedTimestamp = iso(entry), requestedExitTimestamp = iso(exit), reason = reason.trim(), kind = "ADD_DAY"))
             }) { Text("Enviar") }
         },
         dismissButton = { TextButton(onDismiss) { Text("Cancelar") } },
