@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -181,7 +182,11 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
     val act = LocalContext.current as FragmentActivity
     val newsVm: NewsViewModel = hiltViewModel()
     val newsState by newsVm.news.state.collectAsState()
-    val say: (String) -> Unit = { m -> scope.launch { snack.showSnackbar(m) } }
+    val say: (String) -> Unit = { m ->
+        // A failure buzzes harder than a confirmation
+        if (Regex("(?i)no se pudo|error|inv[aá]lid|fall|incorrect|denegad|sin conexi[oó]n").containsMatchIn(m)) Haptics.reject() else Haptics.tick()
+        scope.launch { snack.showSnackbar(m) }
+    }
     // Admins must enable two-step verification first (the server blocks everything else)
     if (user.isAdmin && user.mfaSetupRequired) {
         Box(Modifier.fillMaxSize().background(Xyon.colors.bg).statusBarsPadding()) {
@@ -273,7 +278,6 @@ private fun Scoped(scope: AnimatedVisibilityScope, content: @Composable () -> Un
 /** Floating dark capsule, icon-only, with a lime highlight that springs between tabs. */
 @Composable
 private fun BottomBar(tabs: List<Tab>, selected: String, onSelect: (String) -> Unit) {
-    val haptic = LocalHapticFeedback.current
     val x = Xyon.colors
     val idx = tabs.indexOfFirst { it.route == selected }.coerceAtLeast(0)
     val item = if (tabs.size > 5) 52.dp else 58.dp
@@ -294,13 +298,16 @@ private fun BottomBar(tabs: List<Tab>, selected: String, onSelect: (String) -> U
                     val sel = i == idx
                     val s by animateFloatAsState(if (sel) 1.15f else 1f, spring(Spring.DampingRatioHighBouncy, Spring.StiffnessMedium), label = "s")
                     val tint by animateColorAsState(if (sel) InkBlack else x.onCapsule.copy(alpha = .62f), label = "t")
+                    // The chosen icon pops in with a small wobble
+                    val wobble = remember { androidx.compose.animation.core.Animatable(0f) }
+                    LaunchedEffect(sel) { if (sel) { wobble.snapTo(-16f); wobble.animateTo(0f, spring(Spring.DampingRatioHighBouncy, Spring.StiffnessLow)) } }
                     Box(
                         // TalkBack announces "tab, selected" for the current section
                         Modifier.size(item).clip(CircleShape).semantics { semanticsSelected = sel }.clickable(remember { MutableInteractionSource() }, null, role = androidx.compose.ui.semantics.Role.Tab) {
-                            if (!sel) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); hint = t.label; onSelect(t.route) }
+                            if (!sel) { Haptics.click(); hint = t.label; onSelect(t.route) }
                         },
                         contentAlignment = Alignment.Center,
-                    ) { Icon(t.icon, t.label, tint = tint, modifier = Modifier.scale(s)) }
+                    ) { Icon(t.icon, t.label, tint = tint, modifier = Modifier.scale(s).graphicsLayer { rotationZ = wobble.value }) }
                 }
             }
         }

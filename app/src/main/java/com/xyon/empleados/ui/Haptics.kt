@@ -2,13 +2,22 @@ package com.xyon.empleados.ui
 
 import android.content.Context
 import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.view.HapticFeedbackConstants
 import android.view.View
 import androidx.compose.foundation.Indication
 import androidx.compose.foundation.IndicationNodeFactory
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxColors
 import androidx.compose.material3.CheckboxDefaults
@@ -24,7 +33,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DelegatingNode
 import androidx.compose.ui.platform.LocalHapticFeedback
-import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
 
 /**
@@ -39,6 +47,7 @@ object HapticsPrefs {
 
     fun init(ctx: Context) {
         enabled = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).getBoolean(KEY, true)
+        Haptics.init(ctx)
     }
 
     fun setEnabled(ctx: Context, on: Boolean) {
@@ -47,10 +56,63 @@ object HapticsPrefs {
     }
 }
 
+/**
+ * Real vibration effects (the phone's tick / click / heavy-click waveforms). The system "touch feedback"
+ * tick that Compose's own haptics use is barely perceptible on many phones, so everything the app
+ * vibrates for plays through here. Always gated by the person's "Vibración" switch in Profile.
+ */
+object Haptics {
+    private var vibrator: Vibrator? = null
+
+    fun init(ctx: Context) {
+        vibrator = runCatching {
+            if (Build.VERSION.SDK_INT >= 31) ctx.getSystemService(VibratorManager::class.java)?.defaultVibrator
+            else @Suppress("DEPRECATION") ctx.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }.getOrNull()
+    }
+
+    private fun predefined(effect: Int, fallbackMs: Long, fallbackAmp: Int) {
+        if (!HapticsPrefs.enabled) return
+        val v = vibrator?.takeIf { it.hasVibrator() } ?: return
+        runCatching {
+            v.vibrate(
+                if (Build.VERSION.SDK_INT >= 29) VibrationEffect.createPredefined(effect)
+                else VibrationEffect.createOneShot(fallbackMs, fallbackAmp),
+            )
+        }
+    }
+
+    private fun pattern(timings: LongArray, amplitudes: IntArray) {
+        if (!HapticsPrefs.enabled) return
+        val v = vibrator?.takeIf { it.hasVibrator() } ?: return
+        runCatching {
+            v.vibrate(
+                if (v.hasAmplitudeControl()) VibrationEffect.createWaveform(timings, amplitudes, -1)
+                else VibrationEffect.createWaveform(timings, -1),
+            )
+        }
+    }
+
+    /** Light tick: taps on rows, chips, switches. */
+    fun tick() = predefined(VibrationEffect.EFFECT_TICK, 12, 90)
+    /** Firm click: buttons, tab changes, pull-to-refresh. */
+    fun click() = predefined(VibrationEffect.EFFECT_CLICK, 20, 150)
+    /** Heavy click: the big clock-in button, destructive confirmations. */
+    fun heavy() = predefined(VibrationEffect.EFFECT_HEAVY_CLICK, 35, 230)
+    /** Success: two rising pulses. */
+    fun success() = pattern(longArrayOf(0, 24, 70, 40), intArrayOf(0, 140, 0, 255))
+    /** Failure: three short, hard pulses. */
+    fun reject() = pattern(longArrayOf(0, 40, 60, 40, 60, 60), intArrayOf(0, 255, 0, 255, 0, 200))
+}
+
 /** Every Compose haptic goes through this gate, so the preference covers nav bar, buttons, switches… */
-private class GatedHaptic(private val base: HapticFeedback) : HapticFeedback {
+private class GatedHaptic(@Suppress("unused") private val base: HapticFeedback) : HapticFeedback {
     override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) {
-        if (HapticsPrefs.enabled) base.performHapticFeedback(hapticFeedbackType)
+        when (hapticFeedbackType) {
+            HapticFeedbackType.LongPress -> Haptics.heavy()
+            HapticFeedbackType.TextHandleMove -> Haptics.tick()
+            else -> Haptics.click()
+        }
     }
 }
 
@@ -80,20 +142,36 @@ private class HapticIndication(
     override fun hashCode() = 31 * base.hashCode() + haptic.hashCode()
 }
 
+/**
+ * Every default-indication press: the content squishes a little under the finger and springs back,
+ * and a completed tap ticks. (A Cancel means it turned into a scroll or was dragged off: no tick.)
+ */
 private class HapticNode(
     private val source: InteractionSource,
     private val haptic: HapticFeedback,
     inner: DelegatableNode,
-) : DelegatingNode() {
+) : DelegatingNode(), DrawModifierNode {
+    private val squish = Animatable(1f)
     init { delegate(inner) }
 
     override fun onAttach() {
-        // Release = the tap went through (a Cancel means it turned into a scroll or was dragged off)
         coroutineScope.launch {
-            source.interactions.filterIsInstance<PressInteraction.Release>().collect {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            source.interactions.collect { i ->
+                when (i) {
+                    is PressInteraction.Press -> coroutineScope.launch { squish.animateTo(.965f, spring(stiffness = Spring.StiffnessHigh)) }
+                    is PressInteraction.Release -> {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        coroutineScope.launch { squish.animateTo(1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)) }
+                    }
+                    is PressInteraction.Cancel -> coroutineScope.launch { squish.animateTo(1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)) }
+                }
             }
         }
+    }
+
+    override fun ContentDrawScope.draw() {
+        val s = squish.value
+        if (s == 1f) drawContent() else scale(s, center) { this@draw.drawContent() }
     }
 }
 
@@ -121,11 +199,7 @@ fun HapticCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modi
 }
 
 /** Success pattern (clock-in done): the system "confirm" on Android 11+, a long press before that. */
-fun View.hapticConfirm(): Boolean = HapticsPrefs.enabled && performHapticFeedback(
-    if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.LONG_PRESS,
-)
+fun View.hapticConfirm(): Boolean { Haptics.success(); return HapticsPrefs.enabled }
 
 /** Failure pattern (clock-in rejected): the system "reject" on Android 11+, a long press before that. */
-fun View.hapticReject(): Boolean = HapticsPrefs.enabled && performHapticFeedback(
-    if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.LONG_PRESS,
-)
+fun View.hapticReject(): Boolean { Haptics.reject(); return HapticsPrefs.enabled }

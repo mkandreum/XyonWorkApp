@@ -69,10 +69,10 @@ fun NewsScreen(vm: NewsViewModel, onOpen: (NewsItem) -> Unit) {
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             StatusChip(n.category, if (n.category == "URGENT") Tone.Danger else if (n.category == "EVENT") Tone.Warning else Tone.Info)
-                            Spacer(Modifier.weight(1f)); Text(fmtDate(n.date), color = Slate500, style = MaterialTheme.typography.labelSmall)
+                            Spacer(Modifier.weight(1f)); Text(fmtDate(n.date), color = Xyon.colors.inkSoft, style = MaterialTheme.typography.labelSmall)
                         }
                         Text(n.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
-                        Text(n.summary, color = Slate400, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        Text(n.summary, color = Xyon.colors.inkSoft, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -93,7 +93,7 @@ fun NewsDetailScreen(item: NewsItem?, onBack: () -> Unit) {
                 }
                 StatusChip(item.category, if (item.category == "URGENT") Tone.Danger else Tone.Info)
                 Text(item.title, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(top = 8.dp))
-                Text(fmtDate(item.date), color = Slate500, modifier = Modifier.padding(bottom = 12.dp))
+                Text(fmtDate(item.date), color = Xyon.colors.inkSoft, modifier = Modifier.padding(bottom = 12.dp))
                 Text(item.content.ifBlank { item.summary }, style = MaterialTheme.typography.bodyLarge)
             }
         }
@@ -174,7 +174,7 @@ fun PayrollScreen(onBack: (() -> Unit)?, vm: PayrollViewModel = hiltViewModel(),
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text("${p.month} ${p.year}", style = MaterialTheme.typography.titleMedium)
-                                Text(money(p.amount), color = Primary400, fontWeight = FontWeight.Bold)
+                                Text(money(p.amount), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                             }
                             if (busy == p.id) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                             else {

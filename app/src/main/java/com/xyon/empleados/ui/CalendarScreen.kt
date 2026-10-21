@@ -55,6 +55,8 @@ private data class DayInfo(
     val overtime: Boolean,
     /** Past working day with no record and no absence. */
     val missed: Boolean,
+    /** A request to add this forgotten day is waiting for the manager. */
+    val pendingDay: Boolean = false,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,6 +104,7 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
         val absence = vacOn(day, myVac).firstOrNull()
         val worked = CalendarMath.workedHours(stats, nowMillis, isToday)
         val has = stats != null && stats.fichajes.isNotEmpty()
+        val pendingDay = requests.any { it.kind == "ADD_DAY" && it.status == "PENDING" && parseDate(it.requestedTimestamp) == day }
         // A public holiday is not a worked day (unless the person did clock in)
         val expected = if (absence != null || (holidays.containsKey(day) && !has)) 0.0 else CalendarMath.expectedHours(day, stats)
         return DayInfo(
@@ -109,7 +112,9 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
             live = CalendarMath.liveEntry(stats, nowMillis) != null,
             issue = CalendarMath.hasUnresolvedIssue(stats, requests, isToday, nowMillis),
             overtime = CalendarMath.isOvertime(worked, expected),
-            missed = !has && absence == null && expected > 0 && day.isBefore(today),
+            // A forgotten day with a request already sent is being handled: not "missed" any more
+            missed = !has && absence == null && !pendingDay && expected > 0 && day.isBefore(today),
+            pendingDay = pendingDay,
         )
     }
 
@@ -181,6 +186,7 @@ fun CalendarScreen(user: User, vm: CalendarViewModel = hiltViewModel(), snack: (
                         add(LegendEntry(Icons.AutoMirrored.Filled.TrendingUp, Sun.copy(alpha = .4f), Warning, "Horas extra", infos.count { it.overtime }))
                         add(LegendEntry(Icons.Filled.Warning, Sun, InkBlack, "Incidencias sin resolver", infos.count { it.issue }))
                         add(LegendEntry(Icons.Filled.ErrorOutline, Coral.copy(alpha = .22f), Coral, "Sin fichar", infos.count { it.missed }))
+                        add(LegendEntry(Icons.Filled.HourglassTop, Sun.copy(alpha = .45f), x.ink, "Pendiente de aprobación", infos.count { it.pendingDay }))
                         add(LegendEntry(Icons.Filled.Flight, x.blue, Color.White, "Vacaciones", vacationDays))
                         add(LegendEntry(Icons.Filled.Coffee, Lilac.copy(alpha = .45f), x.ink, "Otras ausencias", otherAbsenceDays))
                         if (showTeam) add(LegendEntry(Icons.Filled.Groups, Violet.copy(alpha = .2f), Violet, "Equipo", null))
@@ -262,6 +268,7 @@ private fun DayCell(info: DayInfo, selected: Boolean, hasEvent: Boolean, hasTeam
     val target = when {
         selected -> x.blue
         info.absence != null -> if (vacation) x.blue.copy(alpha = .14f) else Lilac.copy(alpha = .35f)
+        info.pendingDay -> Sun.copy(alpha = .34f)
         info.missed -> Coral.copy(alpha = .16f)
         weekend -> x.ink.copy(alpha = .05f)
         else -> x.card
@@ -270,6 +277,7 @@ private fun DayCell(info: DayInfo, selected: Boolean, hasEvent: Boolean, hasTeam
     val fg = if (selected) Color.White else x.ink
     val hours = when {
         info.hasRecords -> CalendarMath.formatHM(info.worked)
+        info.pendingDay -> "Pend."
         info.absence != null -> if (vacation) "Vac." else "Aus."
         else -> ""
     }
@@ -285,6 +293,7 @@ private fun DayCell(info: DayInfo, selected: Boolean, hasEvent: Boolean, hasTeam
         if (info.hasRecords) append(", ${CalendarMath.formatHoursMinutes(info.worked)} trabajadas")
         if (info.issue) append(", incidencia sin resolver")
         if (info.missed) append(", sin fichar")
+        if (info.pendingDay) append(", día pendiente de aprobación")
         if (info.absence != null) append(if (vacation) ", vacaciones" else ", ausencia")
     }
     Column(
@@ -298,6 +307,7 @@ private fun DayCell(info: DayInfo, selected: Boolean, hasEvent: Boolean, hasTeam
             Spacer(Modifier.weight(1f))
             when {
                 info.issue -> Icon(Icons.Filled.Warning, null, tint = if (selected) Sun else Warning, modifier = Modifier.size(13.dp))
+                info.pendingDay -> Icon(Icons.Filled.HourglassTop, null, tint = if (selected) Sun else x.ink, modifier = Modifier.size(13.dp))
                 info.live -> Box(Modifier.padding(top = 2.dp).size(8.dp).clip(CircleShape).background(Lime))
             }
         }
@@ -408,6 +418,21 @@ private fun DaySheet(
         }
 
         pairs.forEach { p -> SessionCard(p, requests, onAdjust, onRemind) }
+        // Requests to add this whole forgotten day: shown with their state so it is clear it was sent
+        requests.filter { it.kind == "ADD_DAY" && parseDate(it.requestedTimestamp) == info.date }.forEach { r ->
+            XyonCard(Modifier.fillMaxWidth(), accent = if (r.status == "PENDING") Sun else null) {
+                Text("Día olvidado · solicitud", color = x.inkSoft, style = MaterialTheme.typography.labelSmall)
+                Text("${fmtTimeOf(r.requestedTimestamp)} → ${fmtTimeOf(r.requestedExitTimestamp)}", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatusChip(if (r.status == "PENDING") "Pendiente de aprobación" else statusLabel(r.status), statusTone(r.status))
+                    if (r.status == "PENDING") TextButton({ onRemind(r) }, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                        Icon(Icons.Filled.NotificationsActive, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Recordar", fontWeight = FontWeight.Bold)
+                    }
+                }
+                r.rejectionReason?.let { Text("Motivo: $it", color = x.inkSoft, style = MaterialTheme.typography.bodyMedium) }
+            }
+        }
         if (pairs.isNotEmpty()) {
             Text("¿Una hora no es correcta? Púlsala para pedir la corrección; tu responsable la revisa.", color = Xyon.colors.inkSoft, style = MaterialTheme.typography.bodyMedium)
         }

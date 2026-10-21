@@ -225,7 +225,7 @@ fun HomeScreen(
                                 StatusChip(n.category, if (n.category == "URGENT") Tone.Danger else Tone.Info)
                                 Spacer(Modifier.height(8.dp))
                                 Text(n.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Text(n.summary, color = Slate400, maxLines = 3, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+                                Text(n.summary, color = Xyon.colors.inkSoft, maxLines = 3, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
                             }
                         }
                     }
@@ -310,9 +310,9 @@ fun VacationRow(v: VacationRequest, modifier: Modifier = Modifier, trailing: (@C
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(v.user?.name ?: typeLabel(v.type), style = MaterialTheme.typography.titleMedium)
-                if (v.user != null) Text(typeLabel(v.type), color = Slate400, style = MaterialTheme.typography.bodyMedium)
-                Text("${fmtDate(v.startDate)} → ${fmtDate(v.endDate)}", color = Slate400, style = MaterialTheme.typography.bodyMedium)
-                Text("${v.days.toInt()} día(s)", color = Slate400, style = MaterialTheme.typography.labelSmall)
+                if (v.user != null) Text(typeLabel(v.type), color = Xyon.colors.inkSoft, style = MaterialTheme.typography.bodyMedium)
+                Text("${fmtDate(v.startDate)} → ${fmtDate(v.endDate)}", color = Xyon.colors.inkSoft, style = MaterialTheme.typography.bodyMedium)
+                Text("${v.days.toInt()} día(s)", color = Xyon.colors.inkSoft, style = MaterialTheme.typography.labelSmall)
             }
             StatusChip(statusLabel(v.status), statusTone(v.status))
         }

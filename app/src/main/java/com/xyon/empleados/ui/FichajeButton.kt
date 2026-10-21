@@ -122,7 +122,7 @@ fun FichajeHero(
             Box(
                 Modifier.size(200.dp).clip(CircleShape)
                     .clickable(interaction, null, enabled = !busy, role = Role.Button) {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onToggle()
+                        Haptics.heavy(); onToggle()
                     },
                 contentAlignment = Alignment.Center,
             ) {
@@ -142,10 +142,10 @@ fun FichajeHero(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (inn) {
                     Text(elapsed.ifEmpty { "--:--:--" }, style = MaterialTheme.typography.displayMedium, color = Color.White)
-                    Text(if (workMode == "REMOTE") "Jornada en curso · teletrabajo" else "Jornada en curso", color = Color.White.copy(alpha = .8f))
+                    Text(if (workMode == "REMOTE") "Jornada en curso · teletrabajo" else "Jornada en curso", color = Color.White.copy(alpha = .92f))
                 } else {
                     Text("Fuera de jornada", style = MaterialTheme.typography.headlineMedium, color = Color.White)
-                    Text(expected ?: "Elige dónde trabajas y toca para fichar", color = Color.White.copy(alpha = .8f))
+                    Text(expected ?: "Elige dónde trabajas y toca para fichar", color = Color.White.copy(alpha = .92f))
                 }
             }
         }
@@ -164,14 +164,14 @@ fun WorkModeSwitch(value: String, enabled: Boolean, onChange: (String) -> Unit) 
     val width = 256.dp
     val thumbX by animateDpAsState((width - 8.dp) / 2 * index, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMediumLow), label = "thumb")
     Box(
-        Modifier.width(width).height(48.dp).clip(CircleShape).background(Color.White.copy(alpha = .15f)).padding(4.dp)
+        Modifier.width(width).height(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = .22f)).padding(4.dp)
             .semantics { contentDescription = "Dónde trabajas hoy: ${if (index == 1) "casa" else "oficina"}" },
     ) {
         Box(Modifier.offset(x = thumbX).width((width - 8.dp) / 2).fillMaxHeight().clip(CircleShape).background(Lime))
         Row(Modifier.fillMaxSize()) {
             options.forEachIndexed { i, (key, label) ->
                 val selected = i == index
-                val tint by animateColorAsState(if (selected) InkBlack else Color.White.copy(alpha = if (enabled) .85f else .55f), label = "t$i")
+                val tint by animateColorAsState(if (selected) InkBlack else Color.White.copy(alpha = if (enabled) 1f else .65f), label = "t$i")
                 Row(
                     Modifier.weight(1f).fillMaxHeight().clip(CircleShape)
                         .selectable(selected, enabled = enabled && !selected, role = Role.RadioButton) {

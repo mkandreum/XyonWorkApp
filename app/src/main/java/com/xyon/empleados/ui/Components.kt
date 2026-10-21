@@ -191,7 +191,7 @@ fun XyonCard(
     Column(
         modifier.scale(s).clip(shape)
             .background(container ?: x.card)
-            .let { if (onClick != null) it.clickable(interaction, null, role = Role.Button, onClick = onClick) else it }
+            .let { if (onClick != null) it.clickable(interaction, null, role = Role.Button) { Haptics.tick(); onClick() } else it }
             .drawBehind {
                 if (accent != null) drawSparkle(Offset(size.width - 26.dp.toPx(), 26.dp.toPx()), 13.dp.toPx(), accent, 0f)
             }
@@ -220,7 +220,7 @@ fun Modifier.staggered(index: Int, stepMs: Int = 60): Modifier {
 
 // ═════════════════════════ Chips / labels ═════════════════════════
 
-enum class Tone(val color: Color) { Success(com.xyon.empleados.ui.theme.Success), Warning(com.xyon.empleados.ui.theme.Warning), Danger(com.xyon.empleados.ui.theme.Danger), Info(Primary500), Neutral(Slate400) }
+enum class Tone(val color: Color) { Success(com.xyon.empleados.ui.theme.Success), Warning(com.xyon.empleados.ui.theme.Warning), Danger(com.xyon.empleados.ui.theme.Danger), Info(Primary600), Neutral(Color(0xFF5B6275)) }
 
 private fun onFill(c: Color) = if (c.luminance() > .38f) InkBlack else Color.White
 
@@ -283,12 +283,11 @@ fun XyonButton(
     val pressed by interaction.collectIsPressedAsState()
     val sx by animateFloatAsState(if (pressed) .95f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium), label = "bx")
     val sy by animateFloatAsState(if (pressed) .89f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium), label = "by")
-    val haptic = LocalHapticFeedback.current
     val fill = if (enabled) bg else bg.copy(alpha = .32f)
     Row(
         modifier.graphicsLayer { scaleX = sx; scaleY = sy }.heightIn(min = 58.dp).clip(CircleShape).background(fill)
             .let { if (style == XyonButtonStyle.Light) it.border(1.5.dp, x.outline, CircleShape) else it }
-            .clickable(interaction, null, enabled = enabled && !loading, role = Role.Button) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onClick() }
+            .clickable(interaction, null, enabled = enabled && !loading, role = Role.Button) { Haptics.click(); onClick() }
             .padding(start = 26.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -362,7 +361,7 @@ fun <T> LoadScreen(
     state: LoadState<T>, onRefresh: () -> Unit, modifier: Modifier = Modifier,
     content: @Composable (T) -> Unit,
 ) {
-    PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = onRefresh, modifier = modifier.fillMaxSize()) {
+    PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = { Haptics.click(); onRefresh() }, modifier = modifier.fillMaxSize()) {
         when {
             state.data != null -> Column(Modifier.fillMaxSize()) {
                 androidx.compose.animation.AnimatedVisibility(state.offline) {
@@ -428,7 +427,11 @@ fun ScreenHeader(title: String, subtitle: String? = null, onBack: (() -> Unit)? 
 
 /** List helper: items with staggered entrance. */
 fun <T> LazyListScope.staggeredItems(items: List<T>, key: ((T) -> Any)? = null, row: @Composable (Int, T) -> Unit) {
-    items.forEachIndexed { i, it -> item(key = key?.invoke(it)) { Box(Modifier.staggered(i)) { row(i, it) } } }
+    items.forEachIndexed { i, it ->
+        val k = key?.invoke(it)
+        // With a stable key, rows glide when the list changes (approved/rejected, new item…)
+        item(key = k) { Box((if (k != null) Modifier.animateItem() else Modifier).staggered(i)) { row(i, it) } }
+    }
 }
 
 @Composable
