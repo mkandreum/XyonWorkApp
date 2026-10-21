@@ -55,11 +55,16 @@ class OfflineFichajes @Inject constructor(@ApplicationContext ctx: Context) {
     private val _pending = MutableStateFlow(read())
     val pending: StateFlow<List<PendingFichaje>> = _pending.asStateFlow()
 
+    // The queue carries the clock-in time and location, so it is stored encrypted (Keystore).
+    // A plain-text queue left by an older version is still read once and re-encrypted on the next write.
     private fun read(): List<PendingFichaje> =
-        prefs.getString("queue", null)?.let { runCatching { AppJson.decodeFromString(ser, it) }.getOrNull() } ?: emptyList()
+        prefs.getString("queue", null)?.let { raw ->
+            val json = KeystoreCipher.decrypt(raw) ?: raw
+            runCatching { AppJson.decodeFromString(ser, json) }.getOrNull()
+        } ?: emptyList()
 
     @Synchronized private fun write(list: List<PendingFichaje>) {
-        prefs.edit().putString("queue", AppJson.encodeToString(ser, list)).apply()
+        prefs.edit().putString("queue", KeystoreCipher.encrypt(AppJson.encodeToString(ser, list))).apply()
         _pending.value = list
     }
 

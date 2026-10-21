@@ -105,10 +105,15 @@ class SessionStore @Inject constructor(@ApplicationContext private val ctx: Cont
     }
 }
 
-/** Simple JSON offline cache (DataStore), keyed per resource and wiped on logout. */
+/**
+ * Simple JSON offline cache (DataStore), keyed per resource and wiped on logout. It holds personal
+ * data (clock-ins, absences, payroll amounts), so values are encrypted with the Keystore key; an
+ * entry that cannot be decrypted (older plain-text cache, key reset) is just a cache miss.
+ */
 @Singleton
 class CacheStore @Inject constructor(@ApplicationContext private val ctx: Context) {
-    suspend fun get(key: String): String? = ctx.cacheDs.data.first()[stringPreferencesKey(key)]
-    suspend fun put(key: String, json: String) { ctx.cacheDs.edit { it[stringPreferencesKey(key)] = json } }
+    suspend fun get(key: String): String? =
+        ctx.cacheDs.data.first()[stringPreferencesKey(key)]?.let { KeystoreCipher.decrypt(it) }
+    suspend fun put(key: String, json: String) { ctx.cacheDs.edit { it[stringPreferencesKey(key)] = KeystoreCipher.encrypt(json) } }
     suspend fun clear() { ctx.cacheDs.edit { it.clear() } }
 }
