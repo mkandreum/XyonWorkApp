@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,12 +42,17 @@ import java.time.ZoneId
 fun minutesOfDay(iso: String?): Int? =
     runCatching { Instant.parse(iso).atZone(ZoneId.systemDefault()).toLocalTime().let { it.hour * 60 + it.minute } }.getOrNull()
 fun hhmm(minutes: Int) = "%02d:%02d".format(minutes / 60, minutes % 60)
+/** "H:mm" / "HH:mm" → minutes since midnight, or null when blank or malformed. */
+fun parseHhmm(s: String?): Int? = s?.trim()?.split(":")?.takeIf { it.size == 2 }?.let { (h, m) ->
+    val hh = h.toIntOrNull(); val mm = m.toIntOrNull()
+    if (hh != null && mm != null && hh in 0..23 && mm in 0..59) hh * 60 + mm else null
+}
 
 private val digitStyle = TextStyle(fontSize = 52.sp, fontWeight = FontWeight.Black, fontFeatureSettings = "tnum")
 
 /** A time of day picked on a big digital clock: arrows (hold to repeat) or a vertical drag on each pair of digits. */
 @Composable
-fun DigitalTimePicker(label: String, minutes: Int, onChange: (Int) -> Unit, modifier: Modifier = Modifier, error: String? = null) {
+fun DigitalTimePicker(label: String, minutes: Int, onChange: (Int) -> Unit, modifier: Modifier = Modifier, error: String? = null, onClear: (() -> Unit)? = null) {
     val x = Xyon.colors
     val shape = RoundedCornerShape(22.dp)
     Column(modifier.fillMaxWidth()) {
@@ -56,7 +62,10 @@ fun DigitalTimePicker(label: String, minutes: Int, onChange: (Int) -> Unit, modi
                 .padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(label, color = x.inkSoft, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth())
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, color = x.inkSoft, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                if (onClear != null) TextButton(onClear) { Text("Quitar", color = x.blue, fontWeight = FontWeight.Bold) }
+            }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 DigitColumn("horas", minutes / 60, 24) { onChange(it * 60 + minutes % 60) }
                 Text(":", style = digitStyle, color = x.ink)
@@ -65,6 +74,35 @@ fun DigitalTimePicker(label: String, minutes: Int, onChange: (Int) -> Unit, modi
         }
         if (error != null) Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 12.dp, top = 4.dp))
     }
+}
+
+/**
+ * Digital clock for forms that keep times as "HH:mm" text. When [optional], "" means no time:
+ * the card then offers to add one (starting at [default]) and the clock offers to remove it.
+ */
+@Composable
+fun TimeField(label: String, value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier, optional: Boolean = false, default: String = "09:00", error: String? = null) {
+    val minutes = parseHhmm(value)
+    if (minutes == null && !optional) {
+        // A required time always holds a value, so the form never waits on an invisible one
+        LaunchedEffect(Unit) { onChange(hhmm(parseHhmm(default) ?: 9 * 60)) }
+    }
+    if (minutes == null && optional) {
+        val x = Xyon.colors
+        val shape = RoundedCornerShape(22.dp)
+        Row(
+            modifier.fillMaxWidth().clip(shape).background(x.card).border(1.5.dp, x.outline, shape).padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(label, color = x.inkSoft, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                Text("Sin hora", color = x.ink, fontWeight = FontWeight.Bold)
+            }
+            TextButton({ onChange(hhmm(parseHhmm(default) ?: 9 * 60)) }) { Text("Añadir hora", color = x.blue, fontWeight = FontWeight.Bold) }
+        }
+        return
+    }
+    DigitalTimePicker(label, minutes ?: parseHhmm(default) ?: 9 * 60, { onChange(hhmm(it)) }, modifier, error, onClear = if (optional) ({ onChange("") }) else null)
 }
 
 /** One pair of clock digits (hours or minutes) that wraps around. */

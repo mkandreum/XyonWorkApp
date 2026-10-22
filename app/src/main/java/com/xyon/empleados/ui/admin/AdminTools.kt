@@ -267,8 +267,8 @@ fun AdminOverridesScreen(admin: Boolean, myDept: String, onBack: () -> Unit, sna
             DateField("Fecha", date, { date = it })
             Row(verticalAlignment = Alignment.CenterVertically) { HapticSwitch(dayOff, { dayOff = it }); Spacer(Modifier.width(8.dp)); Text("Día libre") }
             if (!dayOff) {
-                XField(inT, { inT = it }, "Entrada (HH:mm)", error = if (!optOk(inT)) "HH:mm" else null)
-                XField(outT, { outT = it }, "Salida (HH:mm)", error = if (!optOk(outT)) "HH:mm" else null)
+                TimeField("Entrada (opcional)", inT, { inT = it }, optional = true)
+                TimeField("Salida (opcional)", outT, { outT = it }, optional = true, default = "18:00")
                 XField(tol, { tol = it }, "Tolerancia (min, 0-240)", keyboard = androidx.compose.ui.text.input.KeyboardType.Number, error = if (!tolOk) "0-240" else null)
                 if (inT.isBlank() && outT.isBlank() && tol.isBlank()) Muted("Indica al menos una hora o la tolerancia.")
             }

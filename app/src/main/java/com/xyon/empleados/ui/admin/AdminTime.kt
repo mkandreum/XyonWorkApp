@@ -205,7 +205,7 @@ fun AdminFichajesScreen(admin: Boolean, onBack: () -> Unit, snack: (String) -> U
         val init = f?.let { runCatching { Instant.parse(it.timestamp).atZone(zone) }.getOrNull() }
         var tipo by remember(target) { mutableStateOf(f?.tipo ?: "ENTRADA") }
         var date by remember(target) { mutableStateOf(init?.toLocalDate()?.toString() ?: target.date) }
-        var time by remember(target) { mutableStateOf(init?.let { "%02d:%02d".format(it.hour, it.minute) } ?: "") }
+        var time by remember(target) { mutableStateOf(init?.let { "%02d:%02d".format(it.hour, it.minute) } ?: LocalTime.now().let { "%02d:%02d".format(it.hour, it.minute) }) }
         var reason by remember(target) { mutableStateOf("") }
         val ts: Instant? = if (TIME_RE.matches(time)) runCatching {
             val parts = time.split(":").map { it.toInt() }
@@ -224,7 +224,7 @@ fun AdminFichajesScreen(admin: Boolean, onBack: () -> Unit, snack: (String) -> U
             people.data?.firstOrNull { it.id == uid }?.let { Muted("Empleado: ${it.name}") }
             Dropdown("Tipo", tipo, listOf("ENTRADA" to "Entrada", "SALIDA" to "Salida"), { tipo = it })
             DateField("Fecha", date, { date = it })
-            XField(time, { time = it }, "Hora (HH:mm)", error = if (time.isNotEmpty() && ts == null) "Formato HH:mm" else if (future) "No puede ser futura" else null)
+            TimeField("Hora", time, { time = it }, error = if (future) "No puede ser futura" else null)
             XField(reason, { reason = it }, "Motivo (obligatorio, 3-500 caracteres)", singleLine = false, minLines = 2,
                 error = if (reason.isNotEmpty() && !rOk) "Entre 3 y 500 caracteres" else null)
             Muted("La modificación queda auditada y se notifica al empleado.")
@@ -343,10 +343,10 @@ fun AdminShiftsScreen(onBack: () -> Unit, snack: (String) -> Unit, vm: AdminShif
                 DAYS.forEach { (d, l) -> FilterChip(d in days, { days = if (d in days) days - d else days + d }, { Text(l) }) }
             }
             Muted("Días activos: " + days.joinToString(", ") { it.lowercase() })
-            XField(inT, { inT = it }, "Entrada (HH:mm)", error = if (!TIME_RE.matches(inT)) "HH:mm" else null)
-            XField(outT, { outT = it }, "Salida (HH:mm)", error = if (!TIME_RE.matches(outT)) "HH:mm" else null)
-            XField(outMorn, { outMorn = it }, "Salida mañana (turno partido, opcional)", error = if (!optOk(outMorn)) "HH:mm" else null)
-            XField(inLate, { inLate = it }, "Entrada tarde (turno partido, opcional)", error = if (!optOk(inLate)) "HH:mm" else null)
+            TimeField("Entrada", inT, { inT = it })
+            TimeField("Salida", outT, { outT = it }, default = "18:00")
+            TimeField("Salida mañana (turno partido, opcional)", outMorn, { outMorn = it }, optional = true, default = "14:00")
+            TimeField("Entrada tarde (turno partido, opcional)", inLate, { inLate = it }, optional = true, default = "15:00")
             XField(tol, { tol = it }, "Tolerancia (minutos)", keyboard = androidx.compose.ui.text.input.KeyboardType.Number)
             Row(verticalAlignment = Alignment.CenterVertically) { HapticSwitch(flex, { flex = it }); Spacer(Modifier.width(8.dp)); Text("Horario flexible") }
         }

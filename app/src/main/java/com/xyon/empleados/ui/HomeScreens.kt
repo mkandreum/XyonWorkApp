@@ -334,7 +334,7 @@ fun AdjustFichajeDialog(f: Fichaje, onDismiss: () -> Unit, onSend: (CreateAdjust
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("${if (f.tipo == "ENTRADA") "Entrada" else "Salida"} del ${fmtDate(f.timestamp)} a las ${fmtTimeOf(f.timestamp)}", color = Xyon.colors.inkSoft)
-                XField(time, { time = it }, "Hora correcta (HH:mm)")
+                TimeField("Hora correcta", time, { time = it })
                 XField(reason, { reason = it }, "Motivo (mín. 5 caracteres)", singleLine = false, minLines = 2)
             }
         },
