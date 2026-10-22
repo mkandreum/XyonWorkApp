@@ -551,30 +551,37 @@ private fun TimeButton(f: Fichaje, request: FichajeAdjustment?, onAdjust: (Ficha
 /** Entrada abierta sin salida: el empleado pide al responsable que la añada (ADD_EXIT). */
 @Composable
 internal fun RequestExitDialog(entry: Fichaje, onDismiss: () -> Unit, onSend: (CreateAdjustmentRequest) -> Unit) {
-    var time by remember { mutableStateOf("") }
+    val entryMinutes = remember(entry) { minutesOfDay(entry.timestamp) ?: 0 }
+    var time by remember(entry) {
+        // Start from a usual 8h shift, never past midnight nor (today) past now
+        var guess = minOf(entryMinutes + 8 * 60, 23 * 60 + 59)
+        if (parseDate(entry.timestamp) == LocalDate.now()) {
+            val now = java.time.LocalTime.now()
+            guess = maxOf(entryMinutes + 1, minOf(guess, now.hour * 60 + now.minute))
+        }
+        mutableIntStateOf(minOf(guess, 23 * 60 + 59))
+    }
     var reason by remember { mutableStateOf("") }
-    val timeOk = Regex("^([01]\\d|2[0-3]):[0-5]\\d$").matches(time)
     // The exit goes after the entry, on the same day (the server enforces it too)
-    val afterEntry = timeOk && time > fmtTimeOf(entry.timestamp)
+    val afterEntry = time > entryMinutes
     val valid = afterEntry && reason.trim().length >= 5
     AlertDialog(
         onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         title = { Text("Solicitar salida") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     "Entrada del ${fmtDate(entry.timestamp)} a las ${fmtTimeOf(entry.timestamp)} sin salida registrada.",
                     color = Xyon.colors.inkSoft,
                 )
-                XField(time, { time = it }, "Hora de salida (HH:mm)",
-                    error = if (time.isNotEmpty() && !timeOk) "Formato HH:mm" else if (timeOk && !afterEntry) "Tiene que ser después de la entrada" else null)
+                DigitalTimePicker("Hora de salida", time, { time = it }, error = if (!afterEntry) "Tiene que ser después de la entrada" else null)
                 XField(reason, { reason = it }, "Motivo (mín. 5 caracteres)", singleLine = false, minLines = 2)
             }
         },
         confirmButton = {
             TextButton(enabled = valid, onClick = {
                 val date = parseDate(entry.timestamp) ?: return@TextButton
-                val ldt = java.time.LocalDateTime.of(date, java.time.LocalTime.parse(time))
+                val ldt = java.time.LocalDateTime.of(date, java.time.LocalTime.of(time / 60, time % 60))
                 val iso = ldt.atZone(java.time.ZoneId.systemDefault()).toInstant().toString()
                 onSend(CreateAdjustmentRequest(entry.id, iso, reason.trim(), "ADD_EXIT"))
             }) { Text("Enviar") }
@@ -589,30 +596,26 @@ internal fun RequestExitDialog(entry: Fichaje, onDismiss: () -> Unit, onSend: (C
 /** Día entero sin fichar: el empleado pide que se añadan entrada y salida (ADD_DAY). */
 @Composable
 internal fun RequestDayDialog(date: LocalDate, onDismiss: () -> Unit, onSend: (CreateAdjustmentRequest) -> Unit) {
-    var entry by remember { mutableStateOf("") }
-    var exit by remember { mutableStateOf("") }
+    var entry by remember { mutableIntStateOf(9 * 60) }
+    var exit by remember { mutableIntStateOf(17 * 60) }
     var reason by remember { mutableStateOf("") }
-    val hhmm = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
-    val entryOk = hhmm.matches(entry)
-    val exitOk = hhmm.matches(exit)
-    val ordered = entryOk && exitOk && exit > entry
+    val ordered = exit > entry
     val valid = ordered && reason.trim().length >= 5
     AlertDialog(
         onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         title = { Text("Añadir día olvidado") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("${fmtDate(date.toString())}. Se añadirá a tu registro solo si tu responsable lo aprueba.", color = Xyon.colors.inkSoft)
-                XField(entry, { entry = it }, "Hora de entrada (HH:mm)", error = if (entry.isNotEmpty() && !entryOk) "Formato HH:mm" else null)
-                XField(exit, { exit = it }, "Hora de salida (HH:mm)",
-                    error = if (exit.isNotEmpty() && !exitOk) "Formato HH:mm" else if (entryOk && exitOk && !ordered) "Tiene que ser después de la entrada" else null)
+                DigitalTimePicker("Hora de entrada", entry, { entry = it })
+                DigitalTimePicker("Hora de salida", exit, { exit = it }, error = if (!ordered) "Tiene que ser después de la entrada" else null)
                 XField(reason, { reason = it }, "Motivo (mín. 5 caracteres)", singleLine = false, minLines = 2)
             }
         },
         confirmButton = {
             TextButton(enabled = valid, onClick = {
                 val zone = java.time.ZoneId.systemDefault()
-                fun iso(t: String) = java.time.LocalDateTime.of(date, java.time.LocalTime.parse(t)).atZone(zone).toInstant().toString()
+                fun iso(m: Int) = java.time.LocalDateTime.of(date, java.time.LocalTime.of(m / 60, m % 60)).atZone(zone).toInstant().toString()
                 onSend(CreateAdjustmentRequest(requestedTimestamp = iso(entry), requestedExitTimestamp = iso(exit), reason = reason.trim(), kind = "ADD_DAY"))
             }) { Text("Enviar") }
         },
