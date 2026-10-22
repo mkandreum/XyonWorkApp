@@ -141,7 +141,7 @@ fun FichajeHero(
         ) { inn ->
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (inn) {
-                    Text(elapsed.ifEmpty { "--:--:--" }, style = MaterialTheme.typography.displayMedium, color = Color.White)
+                    RollingText(elapsed.ifEmpty { "--:--:--" }, style = MaterialTheme.typography.displayMedium, color = Color.White)
                     Text(if (workMode == "REMOTE") "Jornada en curso · teletrabajo" else "Jornada en curso", color = Color.White.copy(alpha = .92f))
                 } else {
                     Text("Fuera de jornada", style = MaterialTheme.typography.headlineMedium, color = Color.White)
