@@ -39,7 +39,10 @@ import com.xyon.empleados.ui.theme.*
 internal fun isStrongPassword(p: String) =
     p.length >= 12 && p.any { it.isUpperCase() } && p.any { it.isLowerCase() } && p.any { it.isDigit() } && p.any { !it.isLetterOrDigit() }
 
-internal const val PASSWORD_HINT = "Mín. 12 caracteres, con mayúsculas, minúsculas, un número y un símbolo"
+/** Privacy policy of the app itself (Xyon Platforms), served by every portal; before a company is chosen, the default one. */
+internal val APP_PRIVACY_URL get() = ServerConfig.origin + "privacidad-app"
+
+internal const val PASSWORD_HINT ="Mín. 12 caracteres, con mayúsculas, minúsculas, un número y un símbolo"
 
 /**
  * Auth layout, matching the web login: brand row and a huge two-line headline on the animated
@@ -347,6 +350,16 @@ fun ConnectScreen(onDone: () -> Unit, onBack: (() -> Unit)?, vm: ConnectViewMode
     AuthShell(
         "Conecta con\ntu empresa.", "Usa el código que te ha dado tu empresa, su dirección o escanea su QR.",
         "¿Cuál es tu empresa?", "Ejemplo: acme o acme.xyonwork.com", onBack,
+        // Before a company is chosen, the app's own policy (Xyon Platforms, common to every company)
+        footer = {
+            Text("Privacidad de la app · Xyon Platforms", color = x.inkSoft, fontSize = 13.sp,
+                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button) {
+                    runCatching {
+                        ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(APP_PRIVACY_URL)))
+                    }
+                }.padding(6.dp))
+        },
     ) {
         XField(input, { input = it; vm.clearError() }, "Empresa", keyboard = KeyboardType.Uri, leading = Icons.Filled.Business, error = error)
         XyonButton("Continuar", { vm.check(input) }, Modifier.fillMaxWidth(), enabled = input.isNotBlank(), loading = busy)
