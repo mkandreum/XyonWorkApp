@@ -46,6 +46,15 @@ fun lastLocation(ctx: Context): Location? {
         .maxByOrNull { it.time }
 }
 
+/** Legal pages of the company server (privacy, legal notice, account deletion), opened in the browser. */
+fun openLegalPage(ctx: Context, path: String) {
+    val url = com.xyon.empleados.data.ServerConfig.origin + path.removePrefix("/")
+    runCatching {
+        ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+}
+
 /** Safe file name for a PDF saved on the device. */
 fun pdfFileName(name: String): String =
     name.replace(Regex("[^A-Za-z0-9._-]"), "_").let { if (it.endsWith(".pdf", ignoreCase = true)) it else "$it.pdf" }

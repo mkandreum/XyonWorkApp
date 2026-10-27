@@ -73,6 +73,25 @@
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
+        <!-- Home-screen clock-in widgets (2×2 and 4×2). Exported only for the launcher's update broadcasts. -->
+        <receiver
+            android:name=".ui.FichajeWidgetSmall"
+            android:exported="true"
+            android:label="@string/widget_small_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_fichaje_small_info" />
+        </receiver>
+        <receiver
+            android:name=".ui.FichajeWidgetWide"
+            android:exported="true"
+            android:label="@string/widget_wide_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_fichaje_wide_info" />
+        </receiver>
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"

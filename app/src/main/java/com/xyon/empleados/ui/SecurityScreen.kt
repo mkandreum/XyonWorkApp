@@ -185,6 +185,20 @@ fun SecurityScreen(session: SessionViewModel, onBack: () -> Unit, snack: (String
             }
 
             GlassCard(Modifier.fillMaxWidth()) {
+                Text("Información legal", fontWeight = FontWeight.Bold, color = x.ink)
+                Text("Cómo trata tu empresa tus datos, quién es el responsable y cómo ejercer tus derechos.", color = x.inkSoft, modifier = Modifier.padding(vertical = 8.dp))
+                listOf(
+                    "Protección de datos" to "privacidad",
+                    "Aviso legal" to "aviso-legal",
+                    "Eliminar mi cuenta" to "eliminar-cuenta",
+                ).forEach { (label, path) ->
+                    TextButton({ openLegalPage(ctx, path) }, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(label)
+                    }
+                }
+            }
+
+            GlassCard(Modifier.fillMaxWidth()) {
                 Text("Sesiones abiertas", fontWeight = FontWeight.Bold, color = x.ink)
                 Text("Cierra la sesión en todos tus dispositivos, también en este.", color = x.inkSoft, modifier = Modifier.padding(vertical = 8.dp))
                 XyonButton("Cerrar todas las sesiones", { session.logoutAll() }, Modifier.fillMaxWidth(), style = XyonButtonStyle.Light, showArrow = false)

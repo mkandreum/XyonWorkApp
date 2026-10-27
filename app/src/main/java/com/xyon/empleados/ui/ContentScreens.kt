@@ -303,7 +303,7 @@ fun ProfileScreen(
                 HapticSwitch(bio, { onEnableBiometric(it) }, colors = SwitchDefaults.colors(checkedTrackColor = x.blue, checkedThumbColor = Lime))
             }
             NavRow(Icons.Filled.Password, "Cambiar contraseña", { pwd = true })
-            NavRow(Icons.Filled.Security, "Seguridad y tus datos", onSecurity)
+            NavRow(Icons.Filled.Security, "Seguridad, tus datos y privacidad", onSecurity)
             NavRow(Icons.AutoMirrored.Filled.Logout, "Cerrar sesión", { vm.signOut() }, Coral)
         } }
     }

@@ -182,6 +182,8 @@ class RealtimeService : Service() {
     private fun handle(ev: SseEvent) {
         val prefs = Background.seenPrefs(applicationContext)
         ev.id?.let { prefs.edit().putString(Realtime.LAST_ID, it).apply() }
+        // A clock-in made anywhere (web, another phone) or a reconnection: keep the widgets right
+        if (ev.event == "fichaje" || ev.event == "ready") FichajeWidgets.requestRefresh(applicationContext)
         if (ev.event != "notification") return
         val o: JsonObject = runCatching { Json.parseToJsonElement(ev.data).jsonObject }.getOrNull() ?: return
         val id = o["id"]?.jsonPrimitive?.contentOrNull ?: return

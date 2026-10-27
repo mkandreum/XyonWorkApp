@@ -70,10 +70,11 @@ fun HomeScreen(
     // Office / home, remembered on the device
     val modePrefs = remember { ctx.getSharedPreferences("fichaje_prefs", android.content.Context.MODE_PRIVATE) }
     var workMode by remember { mutableStateOf(modePrefs.getString("work_mode", "OFFICE") ?: "OFFICE") }
+    // Location only when the company takes it for this person and work mode (admin policy)
+    fun wantsLocation() = status.data?.wantsLocation(workMode) ?: (workMode != "REMOTE")
     fun go(entering: Boolean) {
-        if (workMode == "REMOTE") { vm.fichar(entering, null, null, null, "REMOTE"); return }
-        val loc = lastLocation(ctx)
-        vm.fichar(entering, loc?.latitude, loc?.longitude, loc?.accuracy, "OFFICE")
+        val loc = if (wantsLocation()) lastLocation(ctx) else null
+        vm.fichar(entering, loc?.latitude, loc?.longitude, loc?.accuracy, workMode)
     }
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         pendingToggle?.let { e -> go(e); pendingToggle = null }
@@ -89,6 +90,10 @@ fun HomeScreen(
             }
             Reminders.setClockedIn(ctx, s.hasActiveEntry || s.missingExit != null, entryAt)
         }
+    }
+    // Home-screen widgets follow the button at once (clock in/out, refresh, offline queue)
+    LaunchedEffect(status.data, week.data) {
+        status.data?.let { s -> FichajeWidgets.publish(ctx, s, week.data?.sumOf { d -> d.horasTrabajadas }) }
     }
 
     val unread = notifs.data?.notifications?.count { !it.read } ?: 0
@@ -120,11 +125,20 @@ fun HomeScreen(
                         onWorkMode = { m -> workMode = m; modePrefs.edit().putString("work_mode", m).apply() },
                     ) {
                         val entering = !clockedIn
-                        // At home no location is used, so no permission is requested
-                        if (workMode != "REMOTE" && !hasLocationPermission(ctx)) {
+                        // No permission is requested when the company does not take the location
+                        if (wantsLocation() && !hasLocationPermission(ctx)) {
                             pendingToggle = entering
                             permLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                         } else go(entering)
+                    }
+                    // Prior information (art. 90 LOPDGDD): said before clocking in, only when it applies
+                    if (!clockedIn && wantsLocation()) {
+                        Row(Modifier.padding(top = 10.dp, start = 16.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.LocationOn, null, tint = Color.White.copy(alpha = .9f), modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Tu empresa registra la ubicación al fichar", color = Color.White.copy(alpha = .9f),
+                                style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 } }
             }

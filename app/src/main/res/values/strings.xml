@@ -1,1 +1,16 @@
-<resources><string name="app_name">XyonWork</string></resources>
+<resources>
+    <string name="app_name">XyonWork</string>
+    <!-- Home-screen widgets -->
+    <string name="widget_small_name">Fichaje</string>
+    <string name="widget_wide_name">Fichaje y semana</string>
+    <string name="widget_small_desc">Tu estado de fichaje y el tiempo de la jornada en curso</string>
+    <string name="widget_wide_desc">Tiempo de la jornada en curso, horas de la semana y tu turno</string>
+    <string name="widget_in">En jornada</string>
+    <string name="widget_out">Fuera de jornada</string>
+    <string name="widget_idle">--:--</string>
+    <string name="widget_dash">—</string>
+    <string name="widget_week">Esta semana</string>
+    <string name="widget_clock_in">Fichar entrada</string>
+    <string name="widget_clock_out">Fichar salida</string>
+    <string name="widget_open">Abrir XyonWork</string>
+</resources>

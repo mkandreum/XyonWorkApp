@@ -114,6 +114,20 @@ private fun FooterLink(prefix: String, action: String, onClick: () -> Unit) {
     }
 }
 
+/** "Privacidad · Aviso legal": the company's notices, readable before signing in (art. 13 RGPD). */
+@Composable
+private fun LegalLinks() {
+    val ctx = LocalContext.current
+    val x = Xyon.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Privacidad", color = x.inkSoft, fontSize = 13.sp, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button) { openLegalPage(ctx, "privacidad") }.padding(6.dp))
+        Text("·", color = x.inkSoft, fontSize = 13.sp)
+        Text("Aviso legal", color = x.inkSoft, fontSize = 13.sp, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button) { openLegalPage(ctx, "aviso-legal") }.padding(6.dp))
+    }
+}
+
 /** "Acme · acme.xyonwork.com — Cambiar": which company this login goes to. */
 @Composable
 private fun CompanyRow(onChange: () -> Unit) {
@@ -145,7 +159,12 @@ fun LoginScreen(vm: SessionViewModel, onRegister: () -> Unit, onForgot: () -> Un
     AuthShell(
         "Tu jornada,\nsin fricción.", "Ficha, pide vacaciones y consulta tus nóminas desde un solo sitio.",
         "Hola de nuevo", "Inicia sesión en tu portal del empleado", null,
-        footer = { FooterLink("¿No tienes cuenta? ", "Regístrate", onRegister) },
+        footer = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                FooterLink("¿No tienes cuenta? ", "Regístrate", onRegister)
+                LegalLinks()
+            }
+        },
     ) {
         CompanyRow(onChangeCompany)
         XField(email, { email = it }, "Correo electrónico", keyboard = KeyboardType.Email, leading = Icons.Filled.Email)
@@ -186,13 +205,21 @@ fun RegisterScreen(vm: SessionViewModel, onBack: () -> Unit) {
     AuthShell(
         "Bienvenido\nal equipo.", "Crea tu cuenta con el código que te ha dado tu empresa. RRHH te asignará departamento y puesto.",
         "Crear cuenta", "Únete al portal del empleado", onBack,
-        footer = { FooterLink("¿Ya tienes cuenta? ", "Inicia sesión", onBack) },
+        footer = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                FooterLink("¿Ya tienes cuenta? ", "Inicia sesión", onBack)
+                LegalLinks()
+            }
+        },
     ) {
         XField(code, { code = it.uppercase() }, "Código de invitación", leading = Icons.Filled.VpnKey)
         XField(name, { name = it }, "Nombre completo", leading = Icons.Filled.Person)
         XField(email, { email = it }, "Correo electrónico", keyboard = KeyboardType.Email, leading = Icons.Filled.Email)
         XField(pass, { pass = it }, "Contraseña", password = true, leading = Icons.Filled.Lock,
             error = if (pass.isNotEmpty() && !strong) PASSWORD_HINT else null)
+        // First layer of the privacy notice at the moment of collection (art. 13 RGPD, art. 11 LOPDGDD)
+        Text("Tu empresa tratará tus datos para gestionar tu relación laboral y el registro de jornada. Más información en «Privacidad», abajo.",
+            color = Xyon.colors.inkSoft, fontSize = 13.sp)
         XyonButton("Crear cuenta", {
             // Department and job title are assigned by HR after sign-up
             vm.doRegister(RegisterRequest(name.trim(), email.trim(), pass, invitationCode = code.trim()))

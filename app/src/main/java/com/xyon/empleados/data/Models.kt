@@ -121,7 +121,15 @@ data class FichajeStatus(
     val hasActiveEntry: Boolean = false, val currentFichaje: Fichaje? = null, val turno: TurnoInfo? = null,
     /** Entry from a previous day with no exit afterwards (forgot to clock out). */
     val missingExit: Fichaje? = null,
-)
+    /** Whether the company takes the location at clock-in for this person; null = older server. */
+    val location: LocationFlags? = null,
+) {
+    /** Older servers (no policy) keep the previous behaviour: location in the office, never at home. */
+    fun wantsLocation(workMode: String) = location?.let { if (workMode == "REMOTE") it.remote else it.office } ?: (workMode != "REMOTE")
+}
+
+@Serializable
+data class LocationFlags(val office: Boolean = false, val remote: Boolean = false)
 @Serializable
 data class CreateFichajeRequest(
     val tipo: String, val latitude: Double? = null, val longitude: Double? = null, val accuracy: Float? = null,

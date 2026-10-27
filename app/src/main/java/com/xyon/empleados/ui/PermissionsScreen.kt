@@ -46,7 +46,7 @@ private fun neededItems(): List<PermItem> = buildList {
         Icons.Filled.Notifications, Lilac, listOf(Manifest.permission.POST_NOTIFICATIONS),
     ))
     add(PermItem(
-        "Ubicación", "Se usa solo al fichar, para validar que estás en tu centro de trabajo.",
+        "Ubicación", "Solo si tu empresa lo tiene activado: se toma únicamente en el momento de fichar, nunca en segundo plano.",
         Icons.Filled.LocationOn, Lime, listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
     ))
     if (Build.VERSION.SDK_INT < 29) add(PermItem(

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Action button while out of shift: clock in (lime) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FFC8F53C" />
+    <corners android:radius="999dp" />
+</shape>

@@ -182,6 +182,7 @@ class SessionViewModel @Inject constructor(
         store.clear(); cache.clear()
         reminders.cancel()
         Background.stop(appCtx)
+        FichajeWidgets.clear(appCtx)
         // Offline clock-ins belong to this session: never send them as another user
         val dropped = offline.all().size
         offline.clear()
@@ -271,7 +272,6 @@ class DashboardViewModel @Inject constructor(
             .onFailure { _events.tryEmit(it.userMessage()) }
     }
 
-    /** workMode REMOTE = teletrabajo: no location is sent (it would be the employee's home). */
     /**
      * Without network (or with older offline clock-ins still queued, to keep their order) the
      * clock-in is saved on the device with its time and sent as soon as there is connection.
@@ -293,7 +293,8 @@ class DashboardViewModel @Inject constructor(
         _busy.value = true
         val tipo = if (entering) "ENTRADA" else "SALIDA"
         val remote = workMode == "REMOTE"
-        val req = if (remote) CreateFichajeRequest(tipo, workMode = "REMOTE") else CreateFichajeRequest(tipo, lat, lon, acc, "OFFICE")
+        // The screen only passes coordinates when the company's policy asks for them in this mode
+        val req = CreateFichajeRequest(tipo, lat, lon, acc, if (remote) "REMOTE" else "OFFICE")
         if (!network.online.value || offline.all().isNotEmpty()) {
             queueOffline(entering, req)
             _busy.value = false

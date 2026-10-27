@@ -40,6 +40,7 @@ interface BackgroundEntryPoint {
     fun session(): SessionStore
     fun offline(): OfflineFichajes
     fun http(): okhttp3.OkHttpClient
+    fun me(): MeProvider
 }
 
 /**
@@ -128,6 +129,7 @@ class FichajeSyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorke
                 Background.notify(applicationContext, p.id.hashCode(), "No se pudo registrar un fichaje sin conexión", message)
             }
         }
+        FichajeWidgets.requestRefresh(applicationContext) // the widget shows what the server accepted
         return Result.success()
     }
 }
