@@ -12,5 +12,6 @@
     <string name="widget_week">Esta semana</string>
     <string name="widget_clock_in">Fichar entrada</string>
     <string name="widget_clock_out">Fichar salida</string>
+    <string name="widget_busy">Fichando…</string>
     <string name="widget_open">Abrir XyonWork</string>
 </resources>

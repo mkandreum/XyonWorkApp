@@ -83,6 +83,7 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_fichaje_small_info" />
         </receiver>
+        <receiver android:name=".ui.FichajeWidgetActionReceiver" android:exported="false" />
         <receiver
             android:name=".ui.FichajeWidgetWide"
             android:exported="true"

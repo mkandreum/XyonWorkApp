@@ -3,10 +3,14 @@ package com.xyon.empleados.ui
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
@@ -21,9 +25,17 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.xyon.empleados.MainActivity
 import com.xyon.empleados.R
+import com.xyon.empleados.data.CreateFichajeRequest
 import com.xyon.empleados.data.FichajeStatus
+import com.xyon.empleados.data.PendingFichaje
+import com.xyon.empleados.data.apiError
+import com.xyon.empleados.data.isOffline
 import com.xyon.empleados.data.ServerConfig
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 
@@ -36,6 +48,10 @@ import java.util.concurrent.TimeUnit
  * A worker re-reads the server state when a widget is added, after boot, every 30 min and when
  * a clock-in is made elsewhere (web, another phone), so it also stays right with the app closed.
  *
+ * The big button clocks in/out right from the widget ([FichajeWidgetActionReceiver] → [toggle]): same
+ * request as the app, location only when the company's policy asks for it and the permission is
+ * already granted (otherwise the button opens the app), offline queue when there is no network.
+ *
  * Only what the widget shows is kept, in app-private storage: in/out, entry time, mode,
  * expected shift and this week's hours. Everything is wiped on logout ([clear]).
  */
@@ -43,12 +59,15 @@ object FichajeWidgets {
     private const val PREFS = "widget_fichaje"
     private const val REFRESH = "widget_fichaje_refresh"
     private const val PERIODIC = "widget_fichaje_periodic"
+    private const val BUSY_MS = 15_000L
+    const val ACTION_TOGGLE = "com.xyon.empleados.widget.TOGGLE"
+    const val ACTION_REFRESH = "com.xyon.empleados.widget.REFRESH"
 
     private val providers = listOf(FichajeWidgetSmall::class.java, FichajeWidgetWide::class.java)
 
     private data class State(
         val loggedIn: Boolean, val clockedIn: Boolean, val sinceMillis: Long, val workMode: String?,
-        val shift: String?, val weekHours: Double?,
+        val shift: String?, val weekHours: Double?, val busy: Boolean, val locOffice: Boolean, val locRemote: Boolean,
     )
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -58,6 +77,8 @@ object FichajeWidgets {
             loggedIn = getBoolean("logged", false), clockedIn = getBoolean("in", false), sinceMillis = getLong("since", 0L),
             workMode = getString("mode", null), shift = getString("shift", null),
             weekHours = if (contains("week")) getFloat("week", 0f).toDouble() else null,
+            busy = System.currentTimeMillis() - getLong("busy_at", 0L) < BUSY_MS,
+            locOffice = getBoolean("loc_office", true), locRemote = getBoolean("loc_remote", false),
         )
     }
 
@@ -75,6 +96,9 @@ object FichajeWidgets {
             putLong("since", if (clockedIn) since else 0L)
             putString("mode", if (clockedIn) status.currentFichaje?.workMode else null)
             putString("shift", shift)
+            putBoolean("loc_office", status.wantsLocation("OFFICE"))
+            putBoolean("loc_remote", status.wantsLocation("REMOTE"))
+            remove("busy_at")
             weekHours?.let { putFloat("week", it.toFloat()) }
         }.apply()
         redraw(ctx)
@@ -124,41 +148,59 @@ object FichajeWidgets {
         }
     }
 
+    private fun openApp(ctx: Context) = PendingIntent.getActivity(
+        ctx, 7301,
+        Intent(ctx, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("xyon://open/home"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
+    private fun broadcast(ctx: Context, action: String, code: Int) = PendingIntent.getBroadcast(
+        ctx, code, Intent(ctx, FichajeWidgetActionReceiver::class.java).setAction(action),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
+    private fun workModePref(ctx: Context) =
+        ctx.getSharedPreferences("fichaje_prefs", Context.MODE_PRIVATE).getString("work_mode", "OFFICE") ?: "OFFICE"
+
     private fun build(ctx: Context, layout: Int, s: State, wide: Boolean): RemoteViews {
         val v = RemoteViews(ctx.packageName, layout)
-        // Whole card and button open Home (where the clock-in button is): never clocks in by accident
-        val open = PendingIntent.getActivity(
-            ctx, 7301,
-            Intent(ctx, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("xyon://open/home"))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        v.setOnClickPendingIntent(R.id.w_root, open)
-        v.setOnClickPendingIntent(R.id.w_action, open)
+        // The card opens Home; only the button clocks in/out
+        v.setOnClickPendingIntent(R.id.w_root, openApp(ctx))
+        if (wide) v.setOnClickPendingIntent(R.id.w_refresh, broadcast(ctx, ACTION_REFRESH, 7303))
 
         if (!s.loggedIn) {
+            pill(v, ctx.getString(R.string.widget_out), on = false)
             v.setTextViewText(R.id.w_status, ServerConfig.companyName ?: ctx.getString(R.string.app_name))
-            v.setInt(R.id.w_status, "setBackgroundResource", R.drawable.widget_pill_off)
-            v.setTextColor(R.id.w_status, 0xFFFFFFFF.toInt())
             showTimer(v, false, 0L)
             v.setTextViewText(R.id.w_detail, "Inicia sesión para ver tu jornada")
-            v.setTextViewText(R.id.w_action, ctx.getString(R.string.widget_open))
-            v.setInt(R.id.w_action, "setBackgroundResource", R.drawable.widget_btn_in)
+            action(v, ctx.getString(R.string.widget_open), R.drawable.ic_widget_play, R.drawable.widget_btn_in)
+            v.setOnClickPendingIntent(R.id.w_action, openApp(ctx))
             if (wide) { v.setTextViewText(R.id.w_week, ctx.getString(R.string.widget_dash)); v.setTextViewText(R.id.w_shift, ""); v.setTextViewText(R.id.w_company, "") }
             return v
         }
 
-        v.setTextViewText(R.id.w_status, ctx.getString(if (s.clockedIn) R.string.widget_in else R.string.widget_out))
-        v.setInt(R.id.w_status, "setBackgroundResource", if (s.clockedIn) R.drawable.widget_pill_on else R.drawable.widget_pill_off)
-        v.setTextColor(R.id.w_status, if (s.clockedIn) 0xFF0C0C12.toInt() else 0xFFFFFFFF.toInt())
+        pill(v, ctx.getString(if (s.clockedIn) R.string.widget_in else R.string.widget_out), on = s.clockedIn)
         showTimer(v, s.clockedIn, s.sinceMillis)
         v.setTextViewText(
             R.id.w_detail,
             if (s.clockedIn) "Desde las ${fmtTimeOf(Instant.ofEpochMilli(s.sinceMillis).toString())}" + if (s.workMode == "REMOTE") " · teletrabajo" else " · oficina"
-            else s.shift?.let { "Turno: $it" } ?: "Toca para fichar",
+            else s.shift?.let { "Turno: $it" } ?: "Toca el botón para fichar",
         )
-        v.setTextViewText(R.id.w_action, ctx.getString(if (s.clockedIn) R.string.widget_clock_out else R.string.widget_clock_in))
-        v.setInt(R.id.w_action, "setBackgroundResource", if (s.clockedIn) R.drawable.widget_btn_out else R.drawable.widget_btn_in)
+        if (s.busy) {
+            action(v, ctx.getString(R.string.widget_busy), if (s.clockedIn) R.drawable.ic_widget_stop else R.drawable.ic_widget_play, R.drawable.widget_btn_busy)
+            v.setOnClickPendingIntent(R.id.w_action, broadcast(ctx, ACTION_REFRESH, 7303))
+        } else {
+            action(
+                v, ctx.getString(if (s.clockedIn) R.string.widget_clock_out else R.string.widget_clock_in),
+                if (s.clockedIn) R.drawable.ic_widget_stop else R.drawable.ic_widget_play,
+                if (s.clockedIn) R.drawable.widget_btn_out else R.drawable.widget_btn_in,
+            )
+            // Location policy needs a permission the widget cannot ask for: the app does it
+            val mode = if (s.clockedIn) s.workMode ?: workModePref(ctx) else workModePref(ctx)
+            val needsApp = (if (mode == "REMOTE") s.locRemote else s.locOffice) && !hasLocationPermission(ctx)
+            v.setOnClickPendingIntent(R.id.w_action, if (needsApp) openApp(ctx) else broadcast(ctx, ACTION_TOGGLE, 7302))
+        }
         if (wide) {
             v.setTextViewText(R.id.w_week, s.weekHours?.let { formatHours(it) } ?: ctx.getString(R.string.widget_dash))
             v.setTextViewText(R.id.w_shift, s.shift ?: "Sin turno asignado hoy")
@@ -166,6 +208,76 @@ object FichajeWidgets {
         }
         return v
     }
+
+    private fun pill(v: RemoteViews, text: String, on: Boolean) {
+        v.setTextViewText(R.id.w_status, text)
+        v.setInt(R.id.w_pill, "setBackgroundResource", if (on) R.drawable.widget_pill_on else R.drawable.widget_pill_off)
+        val ink = if (on) 0xFF0C0C12.toInt() else 0xFFFFFFFF.toInt()
+        v.setTextColor(R.id.w_status, ink)
+        v.setInt(R.id.w_dot, "setColorFilter", ink)
+    }
+
+    private fun action(v: RemoteViews, label: String, icon: Int, bg: Int) {
+        v.setTextViewText(R.id.w_action_label, label)
+        v.setImageViewResource(R.id.w_action_icon, icon)
+        v.setInt(R.id.w_action, "setBackgroundResource", bg)
+    }
+
+    /** Button pressed: clock in or out against the server, then redraw with what it accepted. */
+    internal suspend fun toggle(ctx: Context) {
+        val s = read(ctx)
+        if (!s.loggedIn || s.busy) return
+        val entering = !s.clockedIn
+        val mode = if (entering) workModePref(ctx) else s.workMode ?: workModePref(ctx)
+        val wantsLoc = if (mode == "REMOTE") s.locRemote else s.locOffice
+        if (wantsLoc && !hasLocationPermission(ctx)) { toast(ctx, "Abre la app para dar permiso de ubicación"); return }
+        prefs(ctx).edit().putLong("busy_at", System.currentTimeMillis()).apply()
+        redraw(ctx)
+
+        val e = EntryPointAccessors.fromApplication(ctx.applicationContext, BackgroundEntryPoint::class.java)
+        val session = e.session()
+        if (session.token == null && !session.load()) { clear(ctx); return }
+        val loc = if (wantsLoc) lastLocation(ctx) else null
+        val req = CreateFichajeRequest(if (entering) "ENTRADA" else "SALIDA", loc?.latitude, loc?.longitude, loc?.accuracy, mode)
+        val queue = e.offline()
+        try {
+            if (queue.all().isNotEmpty()) throw java.io.IOException("queued before")
+            val res = e.api().fichar(req)
+            val status = res.status ?: e.api().fichajeCurrent()
+            val week = runCatching { e.api().fichajeWeek(e.me().id()).sumOf { it.horasTrabajadas } }.getOrNull()
+            Reminders.setClockedIn(ctx, status.hasActiveEntry || status.missingExit != null,
+                (status.currentFichaje ?: status.missingExit)?.timestamp?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() })
+            publish(ctx, status, week)
+            toast(ctx, res.warning ?: if (entering) "Entrada registrada" else "Salida registrada")
+        } catch (ex: Exception) {
+            if (ex.isOffline) {
+                // No network: saved on the phone with its time, sent when it is back (same queue as the app)
+                val now = Instant.now().toString()
+                queue.add(PendingFichaje(java.util.UUID.randomUUID().toString(), req.tipo, mode, now, req.latitude, req.longitude, req.accuracy))
+                Background.syncFichajes(ctx)
+                prefs(ctx).edit().apply {
+                    putBoolean("in", entering); putLong("since", if (entering) System.currentTimeMillis() else 0L)
+                    putString("mode", if (entering) mode else null); remove("busy_at")
+                }.apply()
+                redraw(ctx)
+                toast(ctx, "Sin conexión: ${if (entering) "entrada" else "salida"} guardada, se enviará al recuperar la red")
+            } else {
+                prefs(ctx).edit().remove("busy_at").apply()
+                redraw(ctx)
+                requestRefresh(ctx) // stale state (clocked in elsewhere): show the real one
+                toast(ctx, runCatching { ex.apiError().second }.getOrNull() ?: "No se pudo fichar")
+            }
+        }
+    }
+
+    internal fun settle(ctx: Context) {
+        prefs(ctx).edit().remove("busy_at").apply()
+        redraw(ctx)
+        requestRefresh(ctx)
+    }
+
+    private fun toast(ctx: Context, text: String) =
+        Handler(Looper.getMainLooper()).post { Toast.makeText(ctx.applicationContext, text, Toast.LENGTH_LONG).show() }
 
     /** Chronometer base is on the elapsed-realtime clock: recomputed on every draw, so reboots are fine. */
     private fun showTimer(v: RemoteViews, running: Boolean, sinceMillis: Long) {
@@ -192,6 +304,22 @@ class FichajeWidgetSmall : FichajeWidgetBase()
 
 /** 4×2: the same plus this week's hours, the expected shift and the company. */
 class FichajeWidgetWide : FichajeWidgetBase()
+
+/** The widget's own buttons: clock in/out and refresh, with the app closed. */
+class FichajeWidgetActionReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val ctx = context.applicationContext
+        if (intent.action == FichajeWidgets.ACTION_REFRESH) { FichajeWidgets.settle(ctx); return }
+        if (intent.action != FichajeWidgets.ACTION_TOGGLE) return
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // A request still in the air after 9 s is not assumed lost: the real state is re-read
+                if (withTimeoutOrNull(9_000L) { FichajeWidgets.toggle(ctx) } == null) FichajeWidgets.settle(ctx)
+            } finally { pending.finish() }
+        }
+    }
+}
 
 open class FichajeWidgetBase : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {

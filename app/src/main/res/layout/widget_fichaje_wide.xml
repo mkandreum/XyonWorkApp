@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 4×2 clock-in widget: the 2×2 content on the left, this week's hours and the expected
-     shift on the right. Same view ids as widget_fichaje_small so one binder fills both. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/w_root"
     android:layout_width="match_parent"
@@ -16,21 +14,35 @@
         android:layout_weight="1.25"
         android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/w_status"
+        <LinearLayout
+            android:id="@+id/w_pill"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:background="@drawable/widget_pill_off"
-            android:fontFamily="sans-serif-black"
-            android:paddingStart="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
             android:paddingTop="3dp"
             android:paddingEnd="10dp"
-            android:paddingBottom="3dp"
-            android:text="@string/widget_out"
-            android:textAllCaps="true"
-            android:textColor="#FFFFFFFF"
-            android:textSize="10sp" />
+            android:paddingBottom="3dp">
 
+            <ImageView
+                android:id="@+id/w_dot"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:src="@drawable/widget_dot" />
+
+            <TextView
+                android:id="@+id/w_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:fontFamily="sans-serif-black"
+                android:text="@string/widget_out"
+                android:textAllCaps="true"
+                android:textColor="#FFFFFFFF"
+                android:textSize="10sp" />
+        </LinearLayout>
         <Chronometer
             android:id="@+id/w_timer"
             android:layout_width="wrap_content"
@@ -39,7 +51,7 @@
             android:fontFamily="sans-serif-black"
             android:includeFontPadding="false"
             android:textColor="#FFFFFFFF"
-            android:textSize="34sp"
+            android:textSize="36sp"
             android:visibility="gone" />
 
         <TextView
@@ -51,7 +63,7 @@
             android:includeFontPadding="false"
             android:text="@string/widget_idle"
             android:textColor="#FFFFFFFF"
-            android:textSize="26sp" />
+            android:textSize="28sp" />
 
         <TextView
             android:id="@+id/w_detail"
@@ -59,7 +71,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:ellipsize="end"
-            android:maxLines="2"
+            android:maxLines="1"
             android:textColor="#D9FFFFFF"
             android:textSize="12sp" />
 
@@ -68,16 +80,30 @@
             android:layout_height="0dp"
             android:layout_weight="1" />
 
-        <TextView
+        <LinearLayout
             android:id="@+id/w_action"
             android:layout_width="match_parent"
             android:layout_height="38dp"
             android:background="@drawable/widget_btn_in"
-            android:fontFamily="sans-serif-black"
             android:gravity="center"
-            android:text="@string/widget_clock_in"
-            android:textColor="#FF0C0C12"
-            android:textSize="14sp" />
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/w_action_icon"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_widget_play" />
+
+            <TextView
+                android:id="@+id/w_action_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:fontFamily="sans-serif-black"
+                android:text="@string/widget_clock_in"
+                android:textColor="#FF0C0C12"
+                android:textSize="14sp" />
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
@@ -89,12 +115,28 @@
         android:orientation="vertical"
         android:padding="12dp">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/widget_week"
-            android:textColor="#D9FFFFFF"
-            android:textSize="11sp" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/widget_week"
+                android:textColor="#D9FFFFFF"
+                android:textSize="11sp" />
+
+            <ImageView
+                android:id="@+id/w_refresh"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:background="@drawable/widget_icon_btn"
+                android:padding="5dp"
+                android:src="@drawable/ic_widget_refresh" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/w_week"
