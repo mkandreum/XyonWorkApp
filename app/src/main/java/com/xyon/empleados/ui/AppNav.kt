@@ -1,7 +1,14 @@
 package com.xyon.empleados.ui
 
+import io.github.mkandreum.liquidbar.LiquidBarItem
+import io.github.mkandreum.liquidbar.LiquidGlassStyle
+import io.github.mkandreum.liquidbar.LiquidPillBar
+import io.github.mkandreum.liquidbar.LiquidPillDefaults
+import io.github.mkandreum.liquidbar.glass.GlassBackdrop
+import io.github.mkandreum.liquidbar.glass.glassSource
+import io.github.mkandreum.liquidbar.glass.rememberGlassBackdrop
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.selected as semanticsSelected
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -219,7 +226,10 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
         if (tabs.any { it.route == r }) tab(r)
     }
 
-    AuroraBackground {
+    val backdrop = rememberGlassBackdrop()
+    Box(Modifier.fillMaxSize()) {
+    // Everything the glass bar refracts; the bar is a sibling, never a child (RenderNode cycle)
+    AuroraBackground(Modifier.glassSource(backdrop)) {
         SharedTransitionLayout {
             CompositionLocalProvider(LocalSharedScope provides this) {
                 NavHost(
@@ -262,11 +272,12 @@ private fun MainShell(user: User, session: SessionViewModel, snack: SnackbarHost
                 }
             }
         }
-        AnimatedVisibility(
-            showBar, Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically(spring(Spring.DampingRatioMediumBouncy)) { it } + fadeIn(),
-            exit = slideOutVertically { it } + fadeOut(),
-        ) { BottomBar(tabs, current ?: start) { tab(it) } }
+    }
+    AnimatedVisibility(
+        showBar, Modifier.align(Alignment.BottomCenter),
+        enter = slideInVertically(spring(Spring.DampingRatioMediumBouncy)) { it } + fadeIn(),
+        exit = slideOutVertically { it } + fadeOut(),
+    ) { BottomBar(backdrop, tabs, current ?: start) { tab(it) } }
     }
 }
 
@@ -275,13 +286,14 @@ private fun Scoped(scope: AnimatedVisibilityScope, content: @Composable () -> Un
     CompositionLocalProvider(LocalAnimScope provides scope) { Box(Modifier.fillMaxSize()) { content() } }
 }
 
-/** Floating dark capsule, icon-only, with a lime highlight that springs between tabs. */
+/** Floating liquid-glass pill (LiquidBar): the active tab is a lime lens that springs between tabs and can be dragged. */
 @Composable
-private fun BottomBar(tabs: List<Tab>, selected: String, onSelect: (String) -> Unit) {
+private fun BottomBar(backdrop: GlassBackdrop, tabs: List<Tab>, selected: String, onSelect: (String) -> Unit) {
     val x = Xyon.colors
     val idx = tabs.indexOfFirst { it.route == selected }.coerceAtLeast(0)
-    val item = if (tabs.size > 5) 52.dp else 58.dp
-    // Icon-only bar: the section's name shows briefly above it after choosing one
+    val items = remember(tabs) { tabs.map { LiquidBarItem(it.label, it.icon) } }
+    // The active tab shows its name when the pill still fits; otherwise it is icon-only with a brief hint
+    val showLabels = LocalConfiguration.current.screenWidthDp >= tabs.size * 48 + 137
     var hint by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(hint) { if (hint != null) { kotlinx.coroutines.delay(1500); hint = null } }
     Column(Modifier.navigationBarsPadding().padding(bottom = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -290,26 +302,16 @@ private fun BottomBar(tabs: List<Tab>, selected: String, onSelect: (String) -> U
                 Text(hint.orEmpty(), color = InkBlack, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, style = MaterialTheme.typography.labelLarge)
             }
         }
-        Box(Modifier.clip(CircleShape).background(x.capsule).border(1.5.dp, if (x.dark) x.outline else Color.Transparent, CircleShape).padding(7.dp)) {
-            val ind by animateDpAsState(item * idx, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "ind")
-            Box(Modifier.offset(x = ind).size(item).clip(CircleShape).background(Lime))
-            Row {
-                tabs.forEachIndexed { i, t ->
-                    val sel = i == idx
-                    val s by animateFloatAsState(if (sel) 1.15f else 1f, spring(Spring.DampingRatioHighBouncy, Spring.StiffnessMedium), label = "s")
-                    val tint by animateColorAsState(if (sel) InkBlack else x.onCapsule.copy(alpha = .62f), label = "t")
-                    // The chosen icon pops in with a small wobble
-                    val wobble = remember { androidx.compose.animation.core.Animatable(0f) }
-                    LaunchedEffect(sel) { if (sel) { wobble.snapTo(-16f); wobble.animateTo(0f, spring(Spring.DampingRatioHighBouncy, Spring.StiffnessLow)) } }
-                    Box(
-                        // TalkBack announces "tab, selected" for the current section
-                        Modifier.size(item).clip(CircleShape).semantics { semanticsSelected = sel }.clickable(remember { MutableInteractionSource() }, null, role = androidx.compose.ui.semantics.Role.Tab) {
-                            if (!sel) { Haptics.click(); hint = t.label; onSelect(t.route) }
-                        },
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(t.icon, t.label, tint = tint, modifier = Modifier.scale(s).graphicsLayer { rotationZ = wobble.value }) }
-                }
-            }
-        }
+        LiquidPillBar(
+            backdrop = backdrop,
+            items = items,
+            selectedIndex = idx,
+            onSelect = { i ->
+                if (i != idx) { Haptics.click(); if (!showLabels) hint = tabs[i].label; onSelect(tabs[i].route) }
+            },
+            colors = LiquidPillDefaults.colors(accent = Lime, onAccent = InkBlack, content = (if (x.dark) Color.White else InkBlack).copy(alpha = .72f)),
+            glass = if (x.dark) LiquidGlassStyle.Dark else LiquidGlassStyle.Light,
+            showLabels = showLabels,
+        )
     }
 }
