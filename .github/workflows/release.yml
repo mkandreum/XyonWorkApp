@@ -1,0 +1,90 @@
+name: Release
+
+# Al crear un tag vX.Y (git tag v8.2 && git push origin v8.2) compila el APK de producción con R8,
+# lo firma con la clave de release (secretos del repo) y lo publica en un release de GitHub.
+# También se puede lanzar a mano (Actions → Release → Run workflow) para rehacer el APK de un tag.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag del release (p. ej. v8.1). Si ya existe, se sustituye su APK.'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    name: APK firmado (R8)
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+
+      # La clave solo existe durante el job, nunca en el repositorio ni en los logs
+      - name: Clave de firma
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Faltan los secretos ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD"
+            exit 1
+          fi
+          mkdir -p keystore
+          echo "$KEYSTORE_BASE64" | base64 -d > keystore/xyon-release.jks
+          {
+            echo "storeFile=keystore/xyon-release.jks"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > keystore.properties
+
+      - run: chmod +x gradlew
+      - run: ./gradlew assembleRelease testReleaseUnitTest --stacktrace
+
+      - name: Comprobar firma y versión
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs "$APK" | tee signer.txt
+          grep -q "CN=Xyon Empleados" signer.txt || { echo "::error::El APK no está firmado con la clave de producción"; exit 1; }
+          VERSION=$("$BT/aapt2" dump badging "$APK" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+          echo "versionName=$VERSION · tag=$TAG"
+          [ "v$VERSION" = "$TAG" ] || { echo "::error::El tag $TAG no coincide con versionName $VERSION (app/build.gradle.kts)"; exit 1; }
+          cp "$APK" "XyonWork-$VERSION.apk"
+          echo "APK_FILE=XyonWork-$VERSION.apk" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Publicar release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(sha256sum "$APK_FILE" | cut -d' ' -f1)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK_FILE" --clobber
+          else
+            gh release create "$TAG" "$APK_FILE" --title "XyonWork $VERSION" --verify-tag \
+              --notes "APK de producción firmado (R8). SHA-256: \`$SHA\`" --generate-notes
+          fi
+
+      - name: Borrar la clave
+        if: always()
+        run: rm -f keystore/xyon-release.jks keystore.properties
